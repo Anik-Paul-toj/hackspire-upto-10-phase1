@@ -7,7 +7,6 @@ import { useAllLocations } from '@/hooks/useAllLocations';
 const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 
 function AlertsPanel() {
   const [filter, setFilter] = useState<'all'|'pending'|'verified'|'resolved'>('pending');
@@ -58,7 +57,7 @@ function LocationsMap() {
   `;
   const pinIcon = L.divIcon({ html: pinSvg, className: '', iconSize: [28,36], iconAnchor: [14,36] });
 
-  const center = items.length && items[0].data.latestLocation ? [items[0].data.latestLocation.lat, items[0].data.latestLocation.lng] as [number, number] : [20, 0];
+  const center: [number, number] = items.length && items[0].data.latestLocation ? [items[0].data.latestLocation.lat, items[0].data.latestLocation.lng] : [20, 0];
 
   return (
     <div className="rounded-lg border overflow-hidden max-w-[900px] mx-auto">
