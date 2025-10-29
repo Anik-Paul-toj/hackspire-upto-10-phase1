@@ -40,21 +40,28 @@ const Navbar = () => {
         </ul>
 
         <div className="flex items-center gap-3">
-          {!userLoading && user && (
-            // Desktop only: Show user profile and role switcher (hidden on mobile)
-            <div className="hidden lg:flex items-center gap-3">
-              <UserAvatar user={user} size={32} />
-              <span className="text-sm">
-                {user.displayName ?? user.email}
-              </span>
-              <RoleSwitcher />
-              <button
-                onClick={() => signOutUser()}
-                className="inline-flex items-center rounded-md border px-3 py-2 hover:bg-gray-50"
-              >
-                Sign out
-              </button>
-            </div>
+          {!userLoading && (
+            user ? (
+              // Desktop only: Show user profile and role switcher (hidden on mobile)
+              <div className="hidden lg:flex items-center gap-3">
+                <UserAvatar user={user} size={32} />
+                <span className="text-sm">
+                  {user.displayName ?? user.email}
+                </span>
+                <RoleSwitcher />
+                <button
+                  onClick={() => signOutUser()}
+                  className="inline-flex items-center rounded-md border px-3 py-2 hover:bg-gray-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              // Desktop only: Show login buttons when not logged in (hidden on mobile)
+              <div className="hidden lg:flex">
+                <LoginRoleButtons />
+              </div>
+            )
           )}
         </div>
 
