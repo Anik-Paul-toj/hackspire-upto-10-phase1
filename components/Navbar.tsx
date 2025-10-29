@@ -4,18 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import dynamic from "next/dynamic";
-const FirebaseAuthButtons = dynamic(() => import("@/components/FirebaseAuthButtons"), { ssr: false });
 const LoginRoleButtons = dynamic(() => import("@/components/LoginRoleButtons"), { ssr: false });
 const RoleSwitcher = dynamic(() => import("@/components/RoleSwitcher"), { ssr: false });
+const UserAvatar = dynamic(() => import("@/components/UserAvatar"), { ssr: false });
 import { useState } from "react";
-// Clerk removed; using Firebase buttons
+import { useUserProfileContext } from "@/contexts/UserProfileProvider";
+import { signOutUser } from "@/lib/auth";
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
+  const { user, userLoading } = useUserProfileContext();
 
-  // removed Clerk auth controls; Firebase buttons are used below
   return (
-    <nav className="z-50 fixed w-full bg-transparent py-2">
+    <nav className="z-50 fixed w-full bg-white py-2 border-b border-gray-200">
       <div className="container mx-auto flex items-center justify-between py-5 px-8">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl font-bold text-green-600">
@@ -39,8 +40,27 @@ const Navbar = () => {
         </ul>
 
         <div className="flex items-center gap-3">
-          <LoginRoleButtons />
-          <RoleSwitcher />
+          {!userLoading && (
+            user ? (
+              // Logged in: Show user profile and role switcher
+              <div className="flex items-center gap-3">
+                <UserAvatar user={user} size={32} />
+                <span className="text-sm hidden sm:block">
+                  {user.displayName ?? user.email}
+                </span>
+                <RoleSwitcher />
+                <button
+                  onClick={() => signOutUser()}
+                  className="inline-flex items-center rounded-md border px-3 py-2 hover:bg-gray-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              // Not logged in: Show login buttons
+              <LoginRoleButtons />
+            )
+          )}
         </div>
 
         {/* mobile controls */}
@@ -76,7 +96,31 @@ const Navbar = () => {
               </li>
             ))}
             <li className="flex flex-col gap-2">
-              <FirebaseAuthButtons />
+              {!userLoading && (
+                user ? (
+                  // Mobile: Logged in user
+                  <div className="flex flex-col gap-2 p-3">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar user={user} size={32} />
+                      <span className="text-sm">
+                        {user.displayName ?? user.email}
+                      </span>
+                    </div>
+                    <RoleSwitcher />
+                    <button
+                      onClick={() => signOutUser()}
+                      className="inline-flex items-center justify-center rounded-md border px-3 py-2 hover:bg-gray-50"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                ) : (
+                  // Mobile: Not logged in
+                  <div className="p-3">
+                    <LoginRoleButtons />
+                  </div>
+                )
+              )}
             </li>
           </ul>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 import { signInWithGoogle, signOutUser } from '@/lib/auth';
 import { useFirebaseUser } from '@/hooks/useFirebaseUser';
+import UserAvatar from './UserAvatar';
 
 export default function FirebaseAuthButtons() {
   const { user, loading } = useFirebaseUser();
@@ -11,7 +12,7 @@ export default function FirebaseAuthButtons() {
     return (
       <button
         onClick={() => signInWithGoogle()}
-        className="inline-flex items-center rounded-md bg-black px-3 py-2 text-white hover:bg-gray-800"
+        className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-white hover:bg-green-700"
       >
         Continue with Google
       </button>
@@ -20,7 +21,7 @@ export default function FirebaseAuthButtons() {
 
   return (
     <div className="flex items-center gap-3">
-      <img src={user.photoURL ?? ''} alt="avatar" className="h-8 w-8 rounded-full" />
+      <UserAvatar user={user} size={32} />
       <span className="text-sm">{user.displayName ?? user.email}</span>
       <button
         onClick={() => signOutUser()}

@@ -2,9 +2,9 @@
 export const NAV_LINKS = [
   { href: '/', key: 'home', label: 'Home' },
   { href: '/status', key: 'status', label: 'Status' },
-  { href: '/', key: 'how_hilink_work', label: 'How Hilink Work?' },
-  { href: '/', key: 'services', label: 'Services' },
-  { href: '/', key: 'pricing ', label: 'Pricing ' },
+  { href: '/', key: 'how_guardio_work', label: 'How Guardio Works?' },
+  { href: '/', key: 'features', label: 'Features' },
+  { href: '/', key: 'safety_zones', label: 'Safety Zones' },
   { href: '/', key: 'contact_us', label: 'Contact Us' },
 ];
 
@@ -19,32 +19,32 @@ export const PEOPLE_URL = [
 // FEATURES SECTION
 export const FEATURES = [
   {
-    title: 'Real maps can be offline',
+    title: 'Blockchain-based Digital Tourist ID',
     icon: '/map.svg',
     variant: 'green',
     description:
-      'We provide a solution for you to be able to use our application when climbing, yes offline maps you can use at any time there is no signal at the location',
+      'Tamper-proof digital verification with biometric data and QR profile for trusted identity verification and secure access to tourist services.',
   },
   {
-    title: 'Set an adventure schedule',
+    title: 'IoT-driven Geo-Fencing & SOS Alerts',
     icon: '/calendar.svg',
     variant: 'green',
     description:
-      "Schedule an adventure with friends. On holidays, there are many interesting offers from Hilink. That way, there's no more discussion",
+      'Smart sensors detect hazards and trigger instant alerts to tourists. Set virtual boundaries for safety zones with automated emergency responses.',
   },
   {
-    title: 'Technology using augment reality',
+    title: 'Offline Emergency Mesh using WebRTC',
     icon: '/tech.svg',
     variant: 'green',
     description:
-      'Technology uses augmented reality as a guide to your hiking trail in the forest to the top of the mountain. Already supported by the latest technology without an internet connection',
+      'P2P communication network that functions during network blackouts. Maintain critical connectivity when traditional emergency systems fail.',
   },
   {
-    title: 'Many new locations every month',
+    title: 'Real-time Location & Safety Ledger',
     icon: '/location.svg',
     variant: 'orange',
     description:
-      'Lots of new locations every month, because we have a worldwide community of climbers who share their best experiences with climbing',
+      'Continuous tracking with immutable safety records for accountability. Coordinate emergency response with precise location data and incident history.',
   },
 ];
 
@@ -53,25 +53,25 @@ export const FOOTER_LINKS = [
   {
     title: 'Learn More',
     links: [
-      'About Hilink',
-      'Press Releases',
-      'Environment',
-      'Jobs',
+      'About Guardio',
+      'Safety Technology',
+      'Privacy & Security',
+      'Emergency Response',
       'Privacy Policy',
       'Contact Us',
     ],
   },
   {
-    title: 'Our Community',
-    links: ['Climbing xixixi', 'Hiking Guardio', 'Guardio kinthill'],
+    title: 'Safety Community',
+    links: ['Tourist Safety Network', 'Emergency Responders', 'Guardio Partners'],
   },
 ];
 
 export const FOOTER_CONTACT_INFO = {
-  title: 'Contact Us',
+  title: 'Emergency Contact',
   links: [
-    { label: 'Admin Officer', value: '123-456-7890' },
-    { label: 'Email Officer', value: 'guardio@akinthil.com' },
+    { label: 'Emergency Hotline', value: '911-GUARDIO' },
+    { label: 'Support Email', value: 'help@guardio.safety' },
   ],
 };
 

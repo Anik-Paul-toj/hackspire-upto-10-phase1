@@ -44,8 +44,12 @@ const Hero = () => {
         </p>
 
         <div className="flex flex-col w-full gap-3 sm:flex-row sm:items-center">
-          <Button size="lg" className="bg-green-600 text-white px-5 py-3 rounded-md shadow-md hover:brightness-95 transition">
-            Download App
+          <Button 
+            size="lg" 
+            className="bg-green-600 text-white px-5 py-3 rounded-md shadow-md hover:brightness-95 transition"
+            onClick={() => router.push('/map')}
+          >
+            Start Safety Journey
             <ArrowRight className="ml-2 w-5 h-5" />
           </Button>
 
@@ -85,7 +89,7 @@ const Hero = () => {
       </div>
 
       <div className="relative flex flex-1 items-start justify-center mt-8 xl:mt-0">
-  <div className="relative z-20 w-72 flex flex-col gap-6 rounded-3xl bg-gradient-to-r from-black/70 to-black/80 px-6 py-6 shadow-lg">
+  <div className="relative z-20 w-72 flex flex-col gap-6 rounded-3xl bg-linear-to-r from-black/70 to-black/80 px-6 py-6 shadow-lg">
           <div className="flex flex-col">
             <div className="flex items-center justify-between">
               <p className="text-[16px] font-normal text-green-100">Location</p>
