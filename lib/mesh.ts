@@ -16,6 +16,7 @@ export class MeshRoom {
   private roomId: string;
   private callbacks: MeshCallbacks;
   private pendingCandidates: any[] = [];
+  private processedCandidates?: Set<string>;
   private isCreator: boolean = false;
 
   constructor(roomId: string, callbacks: MeshCallbacks = {}) {
@@ -24,8 +25,22 @@ export class MeshRoom {
     this.pc = new RTCPeerConnection({
       iceServers: [
         { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
-        { urls: 'stun:stun.l.google.com:19302' }
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        // Public TURN servers for better NAT traversal
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject', 
+          credential: 'openrelayproject'
+        }
       ],
+      iceCandidatePoolSize: 10,
     });
 
     this.pc.onconnectionstatechange = () => {
@@ -45,7 +60,12 @@ export class MeshRoom {
         this.callbacks.onStatus?.('connected');
       }
       if (this.pc.iceConnectionState === 'failed') {
-        this.callbacks.onError?.(new Error('ICE connection failed'));
+        console.log('ICE connection failed, attempting restart...');
+        this.restartIce();
+      }
+      if (this.pc.iceConnectionState === 'disconnected') {
+        console.log('ICE connection disconnected');
+        this.callbacks.onStatus?.('disconnected');
       }
     };
   }
@@ -66,6 +86,8 @@ export class MeshRoom {
   async create(): Promise<void> {
     this.isCreator = true;
     const { db } = getFirebase();
+    
+    // Clear any existing room data
     await setDoc(doc(db, 'mesh_network', this.roomId), {
       participants: [],
       messages: [],
@@ -75,9 +97,12 @@ export class MeshRoom {
       offer: null,
       answer: null,
       candidates: [],
-    }, { merge: true });
+    });
 
-    this.dc = this.pc.createDataChannel('mesh', { ordered: true });
+    this.dc = this.pc.createDataChannel('mesh', { 
+      ordered: true,
+      maxRetransmits: 3 
+    });
     this.setupDataChannelHandlers();
 
     // Set up ICE candidate handling for the creator
@@ -131,12 +156,17 @@ export class MeshRoom {
     this.isCreator = false;
     const { db } = getFirebase();
     const roomRef = doc(db, 'mesh_network', this.roomId);
+    
+    // Wait a moment for room to be fully created
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const snap = await getDoc(roomRef);
     if (!snap.exists()) throw new Error('Room not found');
     const data = snap.data() as any;
     if (!data.offer) throw new Error('No offer available');
 
     this.pc.ondatachannel = (evt) => {
+      console.log('DataChannel received');
       this.dc = evt.channel;
       this.setupDataChannelHandlers();
     };
@@ -168,7 +198,7 @@ export class MeshRoom {
       }
     };
 
-    // Listen for caller candidates
+    // Listen for caller candidates and process existing ones
     this.unsub = onSnapshot(roomRef, async (fresh) => {
       const d = fresh.data() as any;
       if (Array.isArray(d?.candidates) && d.candidates.length > 0) {
@@ -189,6 +219,15 @@ export class MeshRoom {
         }
       }
     }
+
+    // Set a timeout for connection
+    setTimeout(() => {
+      if (this.pc.iceConnectionState === 'checking' || this.pc.iceConnectionState === 'new') {
+        console.log('Connection timeout, attempting restart...');
+        this.callbacks.onStatus?.('timeout - retrying');
+        this.restartIce();
+      }
+    }, 15000);
   }
 
   send(message: string) {
@@ -261,9 +300,21 @@ export class MeshRoom {
       return;
     }
 
+    // Check if we already processed this candidate
+    const candidateKey = `${candidate.candidate}_${candidate.sdpMid}_${candidate.sdpMLineIndex}`;
+    if (!this.processedCandidates) {
+      this.processedCandidates = new Set();
+    }
+    
+    if (this.processedCandidates.has(candidateKey)) {
+      return; // Already processed
+    }
+    
+    this.processedCandidates.add(candidateKey);
+
     try {
       await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
-      console.log('ICE candidate added successfully');
+      console.log('ICE candidate added successfully:', candidate.candidate);
     } catch (e) {
       console.error('Failed to add ICE candidate:', e);
     }
@@ -291,6 +342,24 @@ export class MeshRoom {
     try { this.unsub?.(); } catch (e) { console.error('Error unsubscribing:', e); }
     try { this.dc?.close(); } catch (e) { console.error('Error closing datachannel:', e); }
     try { this.pc.close(); } catch (e) { console.error('Error closing peer connection:', e); }
+  }
+
+  private async restartIce() {
+    try {
+      console.log('Restarting ICE connection...');
+      const offer = await this.pc.createOffer({ iceRestart: true });
+      await this.pc.setLocalDescription(offer);
+      
+      if (this.isCreator) {
+        const { db } = getFirebase();
+        await updateDoc(doc(db, 'mesh_network', this.roomId), { 
+          offer: { type: offer.type, sdp: offer.sdp } 
+        });
+      }
+    } catch (e) {
+      console.error('Failed to restart ICE:', e);
+      this.callbacks.onError?.(new Error('ICE restart failed'));
+    }
   }
 }
 
