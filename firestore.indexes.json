@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "alerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "locations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "latestLocation.timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ai_analysis",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dangerScore", "order": "DESCENDING" },
+        { "fieldPath": "lastUpdated", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+
+
