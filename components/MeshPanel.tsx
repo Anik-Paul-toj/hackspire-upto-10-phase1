@@ -28,6 +28,9 @@ export default function MeshPanel() {
         onStatus: (s) => { 
           setStatus(s); 
           append(`Status: ${s}`);
+          if (s === 'connected' && meshRef.current?.open) {
+            append('✅ Ready to send messages!');
+          }
         },
       });
       meshRef.current = m;
@@ -51,6 +54,9 @@ export default function MeshPanel() {
         onStatus: (s) => { 
           setStatus(s); 
           append(`Status: ${s}`);
+          if (s === 'connected' && meshRef.current?.open) {
+            append('✅ Ready to send messages!');
+          }
         },
       });
       meshRef.current = m;
@@ -65,11 +71,25 @@ export default function MeshPanel() {
 
   const sendMsg = async () => {
     try {
-      meshRef.current?.send(message);
+      if (!meshRef.current) {
+        append('No connection established');
+        return;
+      }
+      
+      if (!meshRef.current.open) {
+        append('Connection not ready - waiting...');
+        const connected = await meshRef.current.waitForConnection(5000);
+        if (!connected) {
+          append('Connection timeout - unable to send message');
+          return;
+        }
+      }
+      
+      meshRef.current.send(message);
       append(`You: ${message}`);
-      if (user) await meshRef.current?.logMessage(user.uid, message);
+      if (user) await meshRef.current.logMessage(user.uid, message);
     } catch (e: any) {
-      append(`Send failed (channel closed).`);
+      append(`Send failed: ${e?.message ?? 'channel closed'}`);
     }
   };
 
