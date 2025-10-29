@@ -46,19 +46,19 @@ function MarkerOverlay({ coords, accuracy }: { coords: { lat: number; lng: numbe
 		<div
 			style={{
 				position: "absolute",
-				left,
+				left: Math.min(left, window.innerWidth - 200), // Prevent overflow on mobile
 				top,
 				transform: "translateY(-50%)",
 				zIndex: 99999,
 				pointerEvents: "auto",
-				width: 180,
+				width: window.innerWidth < 640 ? 150 : 180, // Smaller on mobile
 			}}
 		>
-			<div className="bg-white/95 text-sm text-gray-800 p-2 rounded-md shadow-md">
+			<div className="bg-white/95 text-xs sm:text-sm text-gray-800 p-2 rounded-md shadow-md">
 				<div className="font-medium">Your location</div>
-				<div className="mt-1">Lat: {coords.lat.toFixed(6)}</div>
-				<div>Lng: {coords.lng.toFixed(6)}</div>
-				{accuracy != null && <div className="text-xs text-gray-600">Accuracy: {Math.round(accuracy)} m</div>}
+				<div className="mt-1">Lat: {coords.lat.toFixed(4)}</div>
+				<div>Lng: {coords.lng.toFixed(4)}</div>
+				{accuracy != null && <div className="text-xs text-gray-600">±{Math.round(accuracy)}m</div>}
 			</div>
 		</div>
 	);
@@ -109,10 +109,27 @@ export default function MapView({ fullScreen = false }: { fullScreen?: boolean }
 	const pinIcon = L.divIcon({ html: pinSvg, className: "", iconSize: [28, 36], iconAnchor: [14, 36] });
 
 	return (
-		<div>
+		<div className="w-full">
 			<div style={{ position: "relative" }}>
-				<div style={{ height: fullScreen ? "100vh" : 420, width: "100%", borderRadius: fullScreen ? 0 : 12, overflow: "hidden" }}>
-					<MapContainer center={[0, 0]} zoom={2} style={{ height: "100%", width: "100%" }}>
+				<div 
+					style={{ 
+						height: fullScreen ? "100vh" : "min(420px, 80vh)", 
+						width: "100%", 
+						borderRadius: fullScreen ? 0 : 12, 
+						overflow: "hidden" 
+					}}
+					className="touch-pan-x touch-pan-y"
+				>
+					<MapContainer 
+						center={[0, 0]} 
+						zoom={2} 
+						style={{ height: "100%", width: "100%" }}
+						className="z-0"
+						touchZoom={true}
+						scrollWheelZoom={true}
+						doubleClickZoom={true}
+						dragging={true}
+					>
 						<TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 						{coords && (
 							<>
@@ -128,8 +145,8 @@ export default function MapView({ fullScreen = false }: { fullScreen?: boolean }
 				</div>
 			</div>
 
-			{loading && <p className="mt-3 text-sm text-gray-600">Locating you… allow location access in your browser.</p>}
-			{error && <p className="mt-3 text-sm text-red-600">Error retrieving location: {error}</p>}
+			{loading && <p className="mt-3 text-sm text-gray-600 px-4 sm:px-0">Locating you… allow location access in your browser.</p>}
+			{error && <p className="mt-3 text-sm text-red-600 px-4 sm:px-0">Error retrieving location: {error}</p>}
 		</div>
 	);
 }

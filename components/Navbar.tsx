@@ -78,11 +78,11 @@ const Navbar = () => {
 
       {/* mobile menu overlay */}
       <div
-        className={`lg:hidden absolute left-0 right-0 top-full bg-white shadow-md transition-max-h duration-300 overflow-hidden ${
-          open ? "max-h-[420px]" : "max-h-0"
+        className={`lg:hidden absolute left-0 right-0 top-full bg-white shadow-md transition-max-h duration-300 overflow-hidden border-b border-gray-200 ${
+          open ? "max-h-[500px]" : "max-h-0"
         }`}
       >
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3">
           <ul className="flex flex-col gap-3">
             {NAV_LINKS.map((link) => (
               <li key={`mobile-${link.key}`}>
@@ -100,16 +100,16 @@ const Navbar = () => {
                 user ? (
                   // Mobile: Logged in user
                   <div className="flex flex-col gap-2 p-3">
-                    <div className="flex items-center gap-3">
-                      <UserAvatar user={user} size={32} />
-                      <span className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <UserAvatar user={user} size={28} />
+                      <span className="text-xs truncate">
                         {user.displayName ?? user.email}
                       </span>
                     </div>
-                    <RoleSwitcher />
+                    <RoleSwitcher isMobile={true} />
                     <button
                       onClick={() => signOutUser()}
-                      className="inline-flex items-center justify-center rounded-md border px-3 py-2 hover:bg-gray-50"
+                      className="inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors"
                     >
                       Sign out
                     </button>
@@ -117,7 +117,7 @@ const Navbar = () => {
                 ) : (
                   // Mobile: Not logged in
                   <div className="p-3">
-                    <LoginRoleButtons />
+                    <LoginRoleButtons isMobile={true} />
                   </div>
                 )
               )}
