@@ -23,19 +23,11 @@ export class MeshRoom {
       iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }],
     });
 
-    this.pc.onicecandidate = async (event) => {
-      if (event.candidate) {
-        try {
-          const { db } = getFirebase();
-          await updateDoc(doc(db, 'mesh_network', this.roomId), {
-            candidates: arrayUnion({ ...event.candidate.toJSON(), from: 'caller' }),
-          });
-        } catch (_) {}
-      }
-    };
-
     this.pc.onconnectionstatechange = () => {
       this.callbacks.onStatus?.(this.pc.connectionState);
+      if (this.pc.connectionState === 'connected') {
+        this.callbacks.onStatus?.('connected');
+      }
       if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed' || this.pc.connectionState === 'closed') {
         this.callbacks.onClose?.();
       }
@@ -65,6 +57,19 @@ export class MeshRoom {
     this.dc.onerror = (e) => this.callbacks.onError?.(e);
     this.dc.onmessage = (e) => this.callbacks.onMessage?.(String(e.data));
 
+    // Set up ICE candidate handling for the creator
+    this.pc.onicecandidate = async (event) => {
+      if (event.candidate) {
+        try {
+          await updateDoc(doc(db, 'mesh_network', this.roomId), {
+            candidates: arrayUnion({ ...event.candidate.toJSON(), from: 'caller' }),
+          });
+        } catch (e) {
+          console.error('Failed to add caller ICE candidate:', e);
+        }
+      }
+    };
+
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
 
@@ -73,13 +78,27 @@ export class MeshRoom {
     // Listen for answer and remote candidates
     this.unsub = onSnapshot(doc(db, 'mesh_network', this.roomId), async (snap) => {
       const data = snap.data() as any;
-      if (data?.answer && this.pc.signalingState !== 'stable') {
-        await this.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+      
+      // Handle answer first
+      if (data?.answer && this.pc.signalingState === 'have-local-offer') {
+        try {
+          await this.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+          this.callbacks.onStatus?.('connected');
+        } catch (e) {
+          console.error('Failed to set remote description:', e);
+          this.callbacks.onError?.(e);
+        }
       }
-      if (Array.isArray(data?.candidates)) {
+      
+      // Then handle ICE candidates
+      if (Array.isArray(data?.candidates) && this.pc.remoteDescription) {
         for (const c of data.candidates) {
           if (c.from === 'callee') {
-            try { await this.pc.addIceCandidate(c); } catch {}
+            try { 
+              await this.pc.addIceCandidate(new RTCIceCandidate(c)); 
+            } catch (e) {
+              console.error('Failed to add ICE candidate:', e);
+            }
           }
         }
       }
@@ -92,7 +111,7 @@ export class MeshRoom {
     const snap = await getDoc(roomRef);
     if (!snap.exists()) throw new Error('Room not found');
     const data = snap.data() as any;
-    if (!data.offer) throw new Error('No offer');
+    if (!data.offer) throw new Error('No offer available');
 
     this.pc.ondatachannel = (evt) => {
       this.dc = evt.channel;
@@ -102,29 +121,42 @@ export class MeshRoom {
       this.dc.onmessage = (e) => this.callbacks.onMessage?.(String(e.data));
     };
 
-    await this.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-    const answer = await this.pc.createAnswer();
-    await this.pc.setLocalDescription(answer);
-    await updateDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } });
+    try {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await this.pc.createAnswer();
+      await this.pc.setLocalDescription(answer);
+      await updateDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } });
+      
+      this.callbacks.onStatus?.('negotiating');
+    } catch (e) {
+      console.error('Failed to create answer:', e);
+      throw e;
+    }
 
-    // Push our ICE candidates
+    // Set up ICE candidate handling for the joiner
     this.pc.onicecandidate = async (event) => {
       if (event.candidate) {
         try {
           await updateDoc(roomRef, {
             candidates: arrayUnion({ ...event.candidate.toJSON(), from: 'callee' }),
           });
-        } catch (_) {}
+        } catch (e) {
+          console.error('Failed to add ICE candidate:', e);
+        }
       }
     };
 
-    // Listen for new caller candidates (optional since we already added in constructor)
+    // Listen for caller candidates
     this.unsub = onSnapshot(roomRef, async (fresh) => {
       const d = fresh.data() as any;
-      if (Array.isArray(d?.candidates)) {
+      if (Array.isArray(d?.candidates) && this.pc.remoteDescription) {
         for (const c of d.candidates) {
           if (c.from === 'caller') {
-            try { await this.pc.addIceCandidate(c); } catch {}
+            try { 
+              await this.pc.addIceCandidate(new RTCIceCandidate(c)); 
+            } catch (e) {
+              console.error('Failed to add caller ICE candidate:', e);
+            }
           }
         }
       }

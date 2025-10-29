@@ -21,17 +21,22 @@ export default function MeshPanel() {
     try {
       meshRef.current?.close();
       const m = new MeshRoom(roomId, {
-        onOpen: () => { setStatus('open'); append('DataChannel open'); },
+        onOpen: () => { setStatus('open'); append('DataChannel open - Connected!'); },
         onClose: () => { setStatus('closed'); append('Connection closed'); },
         onError: (e) => { append(`Error: ${e?.message ?? e}`); },
         onMessage: (msg) => { append(`Peer: ${msg}`); },
-        onStatus: (s) => setStatus(s),
+        onStatus: (s) => { 
+          setStatus(s); 
+          append(`Status: ${s}`);
+        },
       });
       meshRef.current = m;
+      append('Creating room...');
       await m.create();
-      append('Room created; waiting for peer');
+      append('Room created - waiting for peer to join');
     } catch (e: any) {
       append(`Create failed: ${e?.message ?? e}`);
+      setStatus('failed');
     }
   };
 
@@ -39,17 +44,22 @@ export default function MeshPanel() {
     try {
       meshRef.current?.close();
       const m = new MeshRoom(roomId, {
-        onOpen: () => { setStatus('open'); append('DataChannel open'); },
+        onOpen: () => { setStatus('open'); append('DataChannel open - Connected!'); },
         onClose: () => { setStatus('closed'); append('Connection closed'); },
         onError: (e) => { append(`Error: ${e?.message ?? e}`); },
         onMessage: (msg) => { append(`Peer: ${msg}`); },
-        onStatus: (s) => setStatus(s),
+        onStatus: (s) => { 
+          setStatus(s); 
+          append(`Status: ${s}`);
+        },
       });
       meshRef.current = m;
+      append('Joining room...');
       await m.join();
-      append('Joined room; negotiating');
+      append('Join initiated - waiting for connection');
     } catch (e: any) {
       append(`Join failed: ${e?.message ?? e}`);
+      setStatus('failed');
     }
   };
 
