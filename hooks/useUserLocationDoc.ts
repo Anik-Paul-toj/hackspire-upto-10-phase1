@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { onValue, ref } from 'firebase/database';
 import { getFirebase } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 
 export function useUserLocationDoc(user: User | null) {
-  const { db } = getFirebase();
+  const { rtdb } = getFirebase();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -15,13 +15,13 @@ export function useUserLocationDoc(user: User | null) {
       setLoading(false);
       return;
     }
-    const ref = doc(db, 'locations', user.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      setData(snap.exists() ? snap.data() : null);
+    const r = ref(rtdb, `locations/${user.uid}`);
+    const off = onValue(r, (snap) => {
+      setData(snap.exists() ? snap.val() : null);
       setLoading(false);
     });
-    return () => unsub();
-  }, [db, user]);
+    return () => off();
+  }, [rtdb, user]);
 
   return { data, loading };
 }

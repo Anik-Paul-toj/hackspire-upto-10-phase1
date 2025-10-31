@@ -1,18 +1,37 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import "leaflet/dist/leaflet.css";
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAllLocations } from '@/hooks/useAllLocations';
 import { dispatchAlert, resolveAlert } from '@/lib/alerts';
 import { useUserProfileContext } from '@/contexts/UserProfileProvider';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-type Tourist = { id: string; name: string; email: string; role: string; verified: boolean; photoURL?: string; lastActive?: any };
+type Tourist = { 
+  id: string; 
+  name?: string; 
+  email?: string; 
+  role?: string; 
+  verified?: boolean; 
+  photoURL?: string; 
+  lastActive?: any;
+  // Extended profile fields from Firestore users collection
+  age?: string | number;
+  createdAt?: any;
+  fullName?: string;
+  gender?: string;
+  governmentId?: string;
+  nationality?: string;
+  passportNumber?: string;
+  photo?: string;
+  profileCompleted?: boolean;
+  updatedAt?: any;
+};
 type LocationData = { latestLocation?: { lat: number; lng: number; source?: string; timestamp?: any } };
 
 type PolicePOI = {
@@ -46,6 +65,7 @@ export default function AdminDashboard() {
     id?: string;
   } | null>(null);
   const [selectedTourist, setSelectedTourist] = useState<string | null>(null);
+  const [profileModal, setProfileModal] = useState<Tourist | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [dispatchForm, setDispatchForm] = useState<{ alertId: string; classification: string; notes: string }>(
     { alertId: '', classification: 'Medical Emergency', notes: '' }
@@ -53,29 +73,6 @@ export default function AdminDashboard() {
   const [nearbyPolice, setNearbyPolice] = useState<PolicePOI[] | null>(null);
   const [policeLoading, setPoliceLoading] = useState<boolean>(false);
   const [policeError, setPoliceError] = useState<string | null>(null);
-  const [activePolice, setActivePolice] = useState<PolicePOI | null>(null);
-  const [routeInfo, setRouteInfo] = useState<{
-    coords: [number, number][];
-    distanceMeters: number;
-    durationSeconds: number;
-  } | null>(null);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState<boolean>(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  // Cache results for 5 minutes per coarse key
-  const policeCacheRef = useRef<Map<string, { ts: number; data: PolicePOI[] }>>(new Map());
-  const debounceRef = useRef<any>(null);
-
-  // Small helpers
-  const abortableFetch = (input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}) => {
-    const { timeoutMs = 2500, ...rest } = init;
-    const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), timeoutMs);
-    return fetch(input, { ...rest, signal: controller.signal }).finally(() => clearTimeout(to));
-  };
-
-  const toKey = (lat: number, lng: number) => `${lat.toFixed(2)},${lng.toFixed(2)}`; // ~1km bucket
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -90,9 +87,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const { db } = getFirebase();
-    const q = query(collection(db, 'users'), orderBy('lastActive', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTourists(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })).filter((u: any) => u.role === 'tourist'));
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      // Show tourists or anyone without an explicit role (fallback)
+      setTourists(all.filter((u: any) => (u.role ?? 'tourist') === 'tourist'));
     });
     return () => unsub();
   }, []);
@@ -119,6 +117,11 @@ export default function AdminDashboard() {
     });
   }, [tourists, locations, filterStatus]);
 
+  const openTouristModal = (id: string) => {
+    const t = tourists.find(u => u.id === id);
+    if (t) setProfileModal(t);
+  };
+
   const viewTourist = (id: string, name?: string) => {
     const loc = findLocation(id);
     setSelectedTourist(id);
@@ -144,6 +147,8 @@ export default function AdminDashboard() {
         id
       });
     }
+    // Also open profile modal on selection for quick details
+    openTouristModal(id);
   };
 
   const viewAlert = (alert: any, lat: number, lng: number, title = 'SOS') => {
@@ -172,271 +177,105 @@ export default function AdminDashboard() {
     return R * c;
   };
 
-  // Multi-provider nearest police fetch with parallel queries and overall cap
+  // Fetch nearby police stations using OpenStreetMap Overpass API (no API key required)
   const fetchNearbyPolice = async (lat: number, lng: number) => {
     try {
       setPoliceLoading(true);
       setPoliceError(null);
       setNearbyPolice(null);
-      setAiSummary(null);
-      setAiError(null);
-
-      const key = toKey(lat, lng);
-      const now = Date.now();
-      const cached = policeCacheRef.current.get(key);
-      if (cached && now - cached.ts < 300_000) {
-        setNearbyPolice(cached.data);
+      const radius = 10000; // 10km radius
+      
+      // Enhanced query to find police stations, police posts, and related law enforcement facilities
+      const query = `[out:json][timeout:25];
+(
+  node["amenity"="police"](around:${radius},${lat},${lng});
+  way["amenity"="police"](around:${radius},${lat},${lng});
+  relation["amenity"="police"](around:${radius},${lat},${lng});
+  node["office"="government"]["government"="police"](around:${radius},${lat},${lng});
+  way["office"="government"]["government"="police"](around:${radius},${lat},${lng});
+);
+out center;`;
+      
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: query
+      });
+      
+      if (!res.ok) throw new Error(`Overpass API error: ${res.status}`);
+      
+      const data = await res.json();
+      
+      if (!data.elements || data.elements.length === 0) {
+        console.log('No police stations found in the area');
+        setNearbyPolice([]);
         return;
       }
-
-      const providers: Array<() => Promise<PolicePOI[]>> = [];
-
-      // Google Places (if key provided)
-      const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      if (googleKey) {
-        providers.push(async () => {
-          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent('police station')}&key=${googleKey}`;
-          const res = await abortableFetch(url, { timeoutMs: 2500 });
-          if (!res.ok) throw new Error(`google:${res.status}`);
-          const data = await res.json();
-          const list: (PolicePOI | null)[] = (data.results || []).slice(0, 10).map((r: any) => {
-            const poiLat = Number(r?.geometry?.location?.lat);
-            const poiLon = Number(r?.geometry?.location?.lng);
-            if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-            return {
-              id: String(r.place_id || `${poiLat},${poiLon}`),
-              name: r.name || 'Police Station',
-              lat: poiLat,
-              lng: poiLon,
-              distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-            } as PolicePOI;
-          });
-          const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
-          if (pois.length === 0) throw new Error('google:empty');
-          return pois;
-        });
-      }
-
-      // Photon (open provider)
-      providers.push(async () => {
-        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent('police')}&lat=${lat}&lon=${lng}&limit=10`;
-        const res = await abortableFetch(url, { timeoutMs: 2000 });
-        if (!res.ok) throw new Error(`photon:${res.status}`);
-        const data = await res.json();
-        const list: (PolicePOI | null)[] = (data.features || []).map((f: any) => {
-          const poiLat = Number(f?.geometry?.coordinates?.[1]);
-          const poiLon = Number(f?.geometry?.coordinates?.[0]);
-          if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-          const name = f?.properties?.name || 'Police Station';
+      
+      const pois: PolicePOI[] = (data.elements || [])
+        .map((el: any) => {
+          // Handle different element types (node, way, relation)
+          let poiLat: number, poiLon: number;
+          
+          if (el.type === 'node') {
+            poiLat = el.lat;
+            poiLon = el.lon;
+          } else if (el.center) {
+            poiLat = el.center.lat;
+            poiLon = el.center.lon;
+          } else if (el.lat && el.lon) {
+            poiLat = el.lat;
+            poiLon = el.lon;
+          } else {
+            return null;
+          }
+          
+          // Validate coordinates
+          if (!isFinite(poiLat) || !isFinite(poiLon) || Math.abs(poiLat) > 90 || Math.abs(poiLon) > 180) {
+            return null;
+          }
+          
+          // Get the name with multiple fallback options
+          const name = el.tags?.name || 
+                      el.tags?.operator || 
+                      el.tags?.["official_name"] ||
+                      el.tags?.["alt_name"] ||
+                      'Police Station';
+          
+          const distance = Math.round(distanceMeters(lat, lng, poiLat, poiLon));
+          
           return {
-            id: String(f?.properties?.osm_id || `${poiLat},${poiLon}`),
+            id: String(el.id),
             name,
             lat: poiLat,
             lng: poiLon,
-            distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+            distanceMeters: distance
           } as PolicePOI;
-        });
-        const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
-        if (pois.length === 0) throw new Error('photon:empty');
-        return pois;
-      });
-
-      // Overpass mirrors with backoff
-      providers.push(async () => {
-        const endpoints = [
-          'https://overpass-api.de/api/interpreter',
-          'https://overpass.kumi.systems/api/interpreter'
-        ];
-        const radii = [5000, 10000, 50000, 150000];
-        for (const r of radii) {
-          for (const ep of endpoints) {
-            const q = `[
-              out:json
-            ];
-            (
-              node["amenity"="police"](around:${r},${lat},${lng});
-              way["amenity"="police"](around:${r},${lat},${lng});
-              relation["amenity"="police"](around:${r},${lat},${lng});
-            );
-            out center 40;`;
-            const res = await abortableFetch(ep, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-              body: q,
-              timeoutMs: 2500
-            });
-            if (res.status === 429) {
-              await new Promise(r => setTimeout(r, 500));
-              continue;
-            }
-            if (!res.ok) continue;
-            const d = await res.json();
-            const list: (PolicePOI | null)[] = (d.elements || []).map((el: any) => {
-              const center = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
-              const poiLat = Number(center.lat);
-              const poiLon = Number(center.lon);
-              if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-              const name = (el.tags && (el.tags.name || el.tags.operator || 'Police Station')) || 'Police Station';
-              return {
-                id: String(el.id),
-                name,
-                lat: poiLat,
-                lng: poiLon,
-                distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-              } as PolicePOI;
-            });
-            const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
-            if (pois.length > 0) return pois;
-          }
-        }
-        throw new Error('overpass:none');
-      });
-
-      // Nominatim single hit
-      providers.push(async () => {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent('police station')}&limit=1&addressdetails=0&accept-language=en&lat=${lat}&lon=${lng}`;
-        const res = await abortableFetch(url, { timeoutMs: 2000, headers: { 'User-Agent': 'hackspire-app/1.0' } as any });
-        if (!res.ok) throw new Error(`nominatim:${res.status}`);
-        const arr = await res.json();
-        if (!Array.isArray(arr) || arr.length === 0) throw new Error('nominatim:empty');
-        const n = arr[0];
-        const poiLat = Number(n.lat);
-        const poiLon = Number(n.lon);
-        if (!isFinite(poiLat) || !isFinite(poiLon)) throw new Error('nominatim:bad');
-        return [{
-          id: String(n.osm_id || `${poiLat},${poiLon}`),
-          name: n.display_name?.split(',')?.[0] || 'Police Station',
-          lat: poiLat,
-          lng: poiLon,
-          distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-        }];
-      });
-
-      // Run providers in parallel and pick the first that returns any results, with overall cap
-      const overall = Promise.race([
-        (async () => {
-          for (const batch of [providers]) {
-            try {
-              const results = await Promise.any(batch.map(fn => fn()));
-              const top = results.slice(0, 20);
-              setNearbyPolice(top);
-              policeCacheRef.current.set(key, { ts: now, data: top });
-              return;
-            } catch {}
-          }
-          throw new Error('No providers returned results');
-        })(),
-        (async () => { await new Promise(r => setTimeout(r, 3500)); throw new Error('timeout'); })()
-      ]);
-
-      await overall;
+        })
+        .filter((poi: PolicePOI | null): poi is PolicePOI => poi !== null && poi.distanceMeters <= 10000) // Filter within 10km
+        .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters)
+        .slice(0, 30); // Show up to 30 stations
+      
+      console.log(`Found ${pois.length} police stations within 10km`);
+      setNearbyPolice(pois);
     } catch (e: any) {
+      console.error('Error fetching police stations:', e);
       setPoliceError(e?.message || 'Failed to load nearby police stations');
-      setNearbyPolice([]);
     } finally {
       setPoliceLoading(false);
     }
   };
 
-  // Normalize the AI service URL
-  function normalizeRouteSummaryUrl(): string {
-    const raw = process.env.NEXT_PUBLIC_ROUTE_SUMMARY_URL || 'http://localhost:4010/summary';
-    if (raw.startsWith(':')) return `http://localhost${raw}`;
-    if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
-    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
-    return raw;
-  }
-
-  // Generate AI summary with fallback to Next.js proxy if direct fails
-  const generateAISummary = async () => {
-    try {
-      if (!selected || !isFinite(selected.lat) || !isFinite(selected.lng)) return;
-      if (!nearbyPolice || nearbyPolice.length === 0) return;
-      setAiLoading(true);
-      setAiError(null);
-      setAiSummary(null);
-      const body = {
-        tourist: { lat: selected.lat, lng: selected.lng },
-        policeStations: nearbyPolice.slice(0, 5).map(p => ({ name: p.name, lat: p.lat, lng: p.lng }))
-      };
-
-      const directUrl = normalizeRouteSummaryUrl();
-      let res: Response | null = null;
-      try {
-        res = await fetch(directUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      } catch {
-        res = null;
-      }
-      if (!res || !res.ok) {
-        // Fallback to Next.js proxy endpoint
-        res = await fetch('/api/route-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      }
-      if (!res.ok) throw new Error(`AI service error ${res.status}`);
-      const data = await res.json();
-      setAiSummary(String(data?.summary || ''));
-    } catch (e: any) {
-      setAiError(e?.message || 'Failed to generate AI summary');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  // Debounced refetch on selection changes
+  // Refetch police stations when selection changes
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (selected && isFinite(selected.lat) && isFinite(selected.lng)) {
-      debounceRef.current = setTimeout(() => { void fetchNearbyPolice(selected.lat, selected.lng); }, 250);
+      void fetchNearbyPolice(selected.lat, selected.lng);
     } else {
       setNearbyPolice(null);
       setPoliceError(null);
       setPoliceLoading(false);
-      setAiSummary(null);
-      setAiError(null);
     }
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [selected?.lat, selected?.lng]);
-
-  const showPoliceOnMap = (p: PolicePOI) => {
-    setActivePolice(p);
-    setRouteInfo(null);
-    setMapCenter([p.lat, p.lng]);
-    setMapZoom(16);
-    setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 50);
-  };
-
-  const routeToPolice = async (p: PolicePOI) => {
-    if (!selected || !isFinite(selected.lat) || !isFinite(selected.lng)) return;
-    try {
-      setActivePolice(p);
-      setRouteInfo(null);
-      // OSRM public routing service
-      const url = `https://router.project-osrm.org/route/v1/driving/${selected.lng},${selected.lat};${p.lng},${p.lat}?overview=full&geometries=geojson`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Routing error ${res.status}`);
-      const data = await res.json();
-      const route = data?.routes?.[0];
-      if (!route?.geometry?.coordinates) throw new Error('No route found');
-      const coords: [number, number][] = route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-      setRouteInfo({
-        coords,
-        distanceMeters: Math.round(route.distance || 0),
-        durationSeconds: Math.round(route.duration || 0),
-      });
-      setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 50);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  function FitRouteBounds({ points }: { points: [number, number][] }) {
-    const map = useMap();
-    useEffect(() => {
-      if (!points || points.length === 0) return;
-      const bounds = L.latLngBounds(points.map(([lat, lng]) => L.latLng(lat, lng)));
-      map.fitBounds(bounds, { padding: [40, 40] });
-    }, [map, points]);
-    return null;
-  }
 
   const handleDispatchAlert = async (alertId: string, classification: string) => {
     try {
@@ -630,8 +469,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid gap-6 lg:grid-cols-4">
+          <div className="lg:col-span-3 space-y-6">
             {/* Enhanced Map Section */}
             <Card id="admin-map" className="border-green-200 overflow-hidden">
               <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
@@ -806,39 +645,23 @@ export default function AdminDashboard() {
                         key={`police-${p.id}`}
                         position={[p.lat, p.lng]}
                         icon={policeIcon}
-                        eventHandlers={{
-                          click: () => {
-                            setActivePolice(p);
-                          }
-                        }}
                       >
                         <Popup className="custom-popup">
                           <div className="p-2 min-w-[200px]">
                             <div className="font-semibold text-blue-700 mb-1">{p.name}</div>
                             <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km away</div>
-                            <div className="flex gap-2 mt-2">
-                              <Button size="sm" variant="outline" className="flex-1" onClick={() => showPoliceOnMap(p)}>View</Button>
-                              <Button size="sm" className="flex-1" onClick={() => routeToPolice(p)}>Route</Button>
-                            </div>
+                            <Button size="sm" className="mt-2 w-full" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}>Directions</Button>
                           </div>
                         </Popup>
                       </Marker>
                     ))}
-
-                    {/* Route polyline when available */}
-                    {routeInfo && routeInfo.coords.length > 1 && (
-                      <>
-                        <Polyline positions={routeInfo.coords} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.9 }} />
-                        <FitRouteBounds points={routeInfo.coords} />
-                      </>
-                    )}
                   </MapContainer>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Enhanced Selected Location Section */}
-            <Card className="border-green-200">
+            {/* Enhanced Selected Location Section - Spans full width when selected */}
+            <Card className="border-green-200 lg:col-span-3">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -874,7 +697,7 @@ export default function AdminDashboard() {
                       </div>
                       
                       <div className="bg-white p-3 rounded border mt-3">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div>
                             <div className="text-xs text-gray-500 mb-1">Coordinates</div>
                             <div className="font-mono text-sm text-gray-800">
@@ -919,62 +742,107 @@ export default function AdminDashboard() {
                     
                     {/* Nearby Police Stations List */}
                     <div className="mt-4">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M10 2a6 6 0 016 6c0 6-6 10-6 10S4 14 4 8a6 6 0 016-6zm0 8a2 2 0 100-4 2 2 0 000 4z" />
                           </svg>
-                          <div className="font-medium">Nearby Police Stations</div>
+                          <div className="font-medium text-gray-900">Nearby Police Stations</div>
+                          {!policeLoading && nearbyPolice && nearbyPolice.length > 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
+                              {nearbyPolice.length} found
+                            </span>
+                          )}
                         </div>
                         {selected && (
-                          <div className="text-xs text-gray-500">Reference: {selected.lat.toFixed(3)}, {selected.lng.toFixed(3)}</div>
+                          <div className="text-xs text-gray-500">
+                            Within 10 km • {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+                          </div>
                         )}
                       </div>
-                      <div className="rounded border bg-white">
+                      <div className="rounded-lg border bg-white shadow-sm">
                         {policeLoading && (
-                          <div className="p-3 text-sm text-gray-600">Searching within 3 km…</div>
+                          <div className="p-4 flex items-center gap-3">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                            <div className="text-sm text-gray-600">Searching within 10 km radius...</div>
+                          </div>
                         )}
                         {policeError && (
-                          <div className="p-3 text-sm text-red-600">{policeError}</div>
+                          <div className="p-4 bg-red-50 border-l-4 border-red-500">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div className="text-sm text-red-700">{policeError}</div>
+                            </div>
+                          </div>
                         )}
                         {!policeLoading && !policeError && (!nearbyPolice || nearbyPolice.length === 0) && (
-                          <div className="p-3 text-sm text-gray-600">No police stations found nearby.</div>
+                          <div className="p-6 text-center">
+                            <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            <div className="text-sm text-gray-600">No police stations found within 10 km.</div>
+                            <div className="text-xs text-gray-500 mt-1">Try selecting a different location</div>
+                          </div>
                         )}
                         {!policeLoading && !policeError && nearbyPolice && nearbyPolice.length > 0 && (
-                          <>
-                            <div className="flex items-center justify-between p-3 border-b bg-gray-50">
-                              <div className="text-xs text-gray-600">
-                                Top {Math.min(nearbyPolice.length, 5)} results shown for AI summary
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" variant="outline" disabled={aiLoading} onClick={generateAISummary}>
-                                  {aiLoading ? 'Analyzing…' : 'AI Summary'}
-                                </Button>
-                              </div>
-                            </div>
-                            {aiError && (
-                              <div className="p-3 text-sm text-red-600">{aiError}</div>
-                            )}
-                            {aiSummary && (
-                              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap border-b">
-                                {aiSummary}
-                              </div>
-                            )}
-                            <ul className="max-h-60 overflow-y-auto divide-y">
-                              {nearbyPolice.map((p) => (
-                                <li key={p.id} className="p-3 flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-medium text-gray-900">{p.name}</div>
-                                    <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km</div>
+                          <ul className="max-h-80 overflow-y-auto divide-y">
+                            {nearbyPolice.map((p, idx) => (
+                              <li key={p.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start gap-3">
+                                      <div className="shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold text-sm">
+                                        {idx + 1}
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="font-medium text-gray-900 mb-1">{p.name}</div>
+                                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                                          <div className="flex items-center gap-1">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                            </svg>
+                                            <span className="font-medium">{(p.distanceMeters/1000).toFixed(2)} km away</span>
+                                          </div>
+                                          <div className="flex items-center gap-1 font-mono text-[10px]">
+                                            {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" onClick={() => showPoliceOnMap(p)}>View</Button>
-                                    <Button size="sm" onClick={() => routeToPolice(p)}>Route</Button>
+                                  <div className="flex flex-col gap-2 shrink-0">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="text-xs h-8"
+                                      onClick={() => {
+                                        setMapCenter([p.lat, p.lng]);
+                                        setMapZoom(16);
+                                      }}
+                                    >
+                                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                      View
+                                    </Button>
+                                    <Button 
+                                      size="sm"
+                                      className="bg-blue-600 hover:bg-blue-700 text-xs h-8"
+                                      onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
+                                    >
+                                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                      </svg>
+                                      Route
+                                    </Button>
                                   </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     </div>
@@ -1077,7 +945,7 @@ export default function AdminDashboard() {
             )}
 
             {/* Enhanced Tourists Panel */}
-            <Card className="border-green-200 overflow-hidden flex flex-col">
+            <Card className="border-green-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
               <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
                 <div className="px-5 py-6">
                   <CardTitle className="text-white flex items-center justify-between">
@@ -1092,7 +960,7 @@ export default function AdminDashboard() {
                 </div>
               </CardHeader>
               
-              <CardContent className="p-0 flex flex-col">
+              <CardContent className="p-0 flex flex-col flex-1 min-h-0">
                 {/* Filter Controls */}
                 <div className="p-4 border-b bg-gray-50 shrink-0">
                   <div className="flex gap-2">
@@ -1123,7 +991,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div>
+                <div className="flex-1 overflow-y-auto min-h-0">
                   {filteredTourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
@@ -1191,6 +1059,14 @@ export default function AdminDashboard() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="h-6 px-2"
+                                onClick={(e) => { e.stopPropagation(); openTouristModal(tourist.id); }}
+                              >
+                                Profile
                               </Button>
                             </div>
                           </div>
@@ -1298,6 +1174,91 @@ export default function AdminDashboard() {
           </Card>
         </div>
       </div>
+      {/* Tourist Profile Modal */}
+      {profileModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setProfileModal(null)}></div>
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
+                  const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
+                  if (isHttp) {
+                    return (
+                      <img src={src as string} className="w-10 h-10 rounded-full border" alt={profileModal.fullName || profileModal.name || 'User'} />
+                    );
+                  }
+                  return (
+                    <div className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-semibold">
+                      {(profileModal.fullName || profileModal.name || 'T').charAt(0).toUpperCase()}
+                    </div>
+                  );
+                })()}
+                <div>
+                  <div className="font-semibold text-gray-900">{profileModal.fullName || profileModal.name || 'Tourist'}</div>
+                  <div className="text-xs text-gray-600">{profileModal.email}</div>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setProfileModal(null)}>Close</Button>
+            </div>
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-gray-500">Age</div>
+                <div className="text-sm text-gray-900">{profileModal.age ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Gender</div>
+                <div className="text-sm text-gray-900">{profileModal.gender ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Nationality</div>
+                <div className="text-sm text-gray-900">{profileModal.nationality ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Passport Number</div>
+                <div className="text-sm text-gray-900 break-all">{profileModal.passportNumber ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Government ID</div>
+                <div className="text-sm text-gray-900 break-all">{profileModal.governmentId ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Profile Completed</div>
+                <div className="text-sm text-gray-900">{profileModal.profileCompleted ? 'Yes' : 'No'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Created At</div>
+                <div className="text-sm text-gray-900">{formatTimestamp(profileModal.createdAt)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Updated At</div>
+                <div className="text-sm text-gray-900">{formatTimestamp(profileModal.updatedAt)}</div>
+              </div>
+              {(() => {
+                const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
+                const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
+                if (isHttp) {
+                  return (
+                    <div className="sm:col-span-2">
+                      <div className="text-xs text-gray-500 mb-1">Photo</div>
+                      <img src={src as string} alt="profile" className="w-full max-h-80 object-contain rounded border" />
+                    </div>
+                  );
+                }
+                return (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs text-gray-500 mb-1">Photo</div>
+                    <div className="text-sm text-gray-700 bg-gray-50 border rounded p-3">
+                      No web-viewable photo available. Ask the user to re-upload (Cloudinary HTTPS URL required).
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
