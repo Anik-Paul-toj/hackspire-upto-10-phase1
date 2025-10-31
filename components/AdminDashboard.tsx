@@ -149,48 +149,113 @@ export default function AdminDashboard() {
     return R * c;
   };
 
-  // Fetch nearby police stations using OpenStreetMap Overpass API (no API key required)
+  // Fetch nearest police station (prefer Google Places rankby=distance; fallback to Overpass)
   const fetchNearbyPolice = async (lat: number, lng: number) => {
     try {
       setPoliceLoading(true);
       setPoliceError(null);
       setNearbyPolice(null);
-      const radius = 3000; // 3km
-      const query = `[
-        out:json
-      ];
-      (
-        node["amenity"="police"](around:${radius},${lat},${lng});
-        way["amenity"="police"](around:${radius},${lat},${lng});
-        relation["amenity"="police"](around:${radius},${lat},${lng});
-      );
-      out center 20;`;
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: query
-      });
-      if (!res.ok) throw new Error(`Overpass error ${res.status}`);
-      const data = await res.json();
-      const pois: PolicePOI[] = (data.elements || [])
-        .map((el: any) => {
-          const center = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
-          const poiLat = Number(center.lat);
-          const poiLon = Number(center.lon);
-          if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-          const name = (el.tags && (el.tags.name || el.tags.operator || 'Police Station')) || 'Police Station';
-          return {
-            id: String(el.id),
-            name,
-            lat: poiLat,
-            lng: poiLon,
-            distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-          } as PolicePOI;
-        })
-        .filter(Boolean)
-        .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters)
-        .slice(0, 20);
-      setNearbyPolice(pois);
+      const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+      // Try Google Places Nearby Search with rankby=distance (no radius) for multiple nearest results
+      if (googleKey) {
+        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent('police station')}&key=${googleKey}`;
+        const gRes = await fetch(url);
+        if (!gRes.ok) throw new Error(`Google Places error ${gRes.status}`);
+        const gData = await gRes.json();
+        if (Array.isArray(gData.results) && gData.results.length > 0) {
+          const pois: PolicePOI[] = gData.results
+            .slice(0, 10)
+            .map((r: any) => {
+              const poiLat = Number(r?.geometry?.location?.lat);
+              const poiLon = Number(r?.geometry?.location?.lng);
+              if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
+              return {
+                id: String(r.place_id || `${poiLat},${poiLon}`),
+                name: r.name || 'Police Station',
+                lat: poiLat,
+                lng: poiLon,
+                distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+              } as PolicePOI;
+            })
+            .filter(Boolean)
+            .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters);
+          setNearbyPolice(pois);
+          return;
+        }
+        // If Google responds but has no results, fall through to Overpass
+      }
+
+      // Fallback: Overpass API with escalating radius; ensure at least one result if available in region
+      const fetchOverpass = async (r: number) => {
+        const q = `[
+          out:json
+        ];
+        (
+          node["amenity"="police"](around:${r},${lat},${lng});
+          way["amenity"="police"](around:${r},${lat},${lng});
+          relation["amenity"="police"](around:${r},${lat},${lng});
+        );
+        out center 50;`;
+        const resp = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: q
+        });
+        if (!resp.ok) throw new Error(`Overpass error ${resp.status}`);
+        const d = await resp.json();
+        const list: PolicePOI[] = (d.elements || [])
+          .map((el: any) => {
+            const center = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
+            const poiLat = Number(center.lat);
+            const poiLon = Number(center.lon);
+            if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
+            const name = (el.tags && (el.tags.name || el.tags.operator || 'Police Station')) || 'Police Station';
+            return {
+              id: String(el.id),
+              name,
+              lat: poiLat,
+              lng: poiLon,
+              distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+            } as PolicePOI;
+          })
+          .filter(Boolean)
+          .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters);
+        return list;
+      };
+
+      const radii = [5000, 10000, 50000, 150000, 300000];
+      let pois: PolicePOI[] = [];
+      for (const r of radii) {
+        pois = await fetchOverpass(r);
+        if (pois.length > 0) break;
+      }
+
+      if (pois.length === 0) {
+        // Final fallback: Nominatim search (no key) to get one closest result
+        const nomiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent('police station')}&limit=1&addressdetails=0&accept-language=en&lat=${lat}&lon=${lng}`;
+        const nRes = await fetch(nomiUrl, { headers: { 'User-Agent': 'hackspire-app/1.0' } as any });
+        if (nRes.ok) {
+          const nData = await nRes.json();
+          if (Array.isArray(nData) && nData.length > 0) {
+            const n = nData[0];
+            const poiLat = Number(n.lat);
+            const poiLon = Number(n.lon);
+            if (isFinite(poiLat) && isFinite(poiLon)) {
+              pois = [{
+                id: String(n.osm_id || `${poiLat},${poiLon}`),
+                name: n.display_name?.split(',')?.[0] || 'Police Station',
+                lat: poiLat,
+                lng: poiLon,
+                distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+              }];
+            }
+          }
+        }
+      }
+
+      // Ensure at least one is returned if any source produced a coordinate
+      setNearbyPolice(pois.length > 0 ? pois.slice(0, 20) : []);
     } catch (e: any) {
       setPoliceError(e?.message || 'Failed to load nearby police stations');
     } finally {
@@ -812,7 +877,7 @@ export default function AdminDashboard() {
             )}
 
             {/* Enhanced Tourists Panel */}
-            <Card className="border-green-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
+            <Card className="border-green-200 overflow-hidden flex flex-col">
               <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
                 <div className="px-5 py-6">
                   <CardTitle className="text-white flex items-center justify-between">
@@ -827,7 +892,7 @@ export default function AdminDashboard() {
                 </div>
               </CardHeader>
               
-              <CardContent className="p-0 flex flex-col flex-1 min-h-0">
+              <CardContent className="p-0 flex flex-col">
                 {/* Filter Controls */}
                 <div className="p-4 border-b bg-gray-50 shrink-0">
                   <div className="flex gap-2">
@@ -858,7 +923,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto min-h-0">
+                <div>
                   {filteredTourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
