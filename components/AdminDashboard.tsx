@@ -315,30 +315,29 @@ out center;`;
     }
   };
 
-  // Fetch route from Next.js API route (proxies OSRM to avoid CORS)
+  // Fetch route from Next.js API route with improved error handling
   const fetchRoute = async (fromLat: number, fromLng: number, toLat: number, toLng: number) => {
     try {
       setRouteLoading(true);
       setRouteCoordinates(null);
       
-      // Use Next.js API route to proxy OSRM request (avoids CORS issues)
+      // Use Next.js API route to get routing data
       const url = `/api/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`;
       
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Route API error: ${response.status}`);
+        throw new Error(`Route API error: ${response.status} - ${response.statusText}`);
       }
       
       const data = await response.json();
       
       if (data.success && data.coordinates && data.coordinates.length > 0) {
-        // Ensure we have more than 2 points (straight line) - if only 2, it's likely a fallback
-        if (data.coordinates.length > 2) {
-          setRouteCoordinates(data.coordinates);
-          console.log(`Route fetched successfully using ${data.service || 'unknown'} service with ${data.coordinates.length} waypoints`);
-        } else {
-          // If we only got 2 points, it's a straight line fallback - don't use it
-          throw new Error('Route service returned straight line instead of road-based route');
+        setRouteCoordinates(data.coordinates);
+        console.log(`Route fetched successfully using ${data.service || 'unknown'} service with ${data.coordinates.length} waypoints`);
+        
+        // Show notification about the route service used
+        if (data.service === 'fallback-direct') {
+          console.log('Note: Using direct route due to external routing services being unavailable');
         }
       } else if (data.error) {
         throw new Error(data.error);
@@ -347,9 +346,19 @@ out center;`;
       }
     } catch (e: any) {
       console.error('Error fetching route:', e);
-      // Don't show a straight line fallback - show an error instead
       setRouteCoordinates(null);
-      alert(`Unable to calculate route: ${e.message}. Please try again or check your internet connection.`);
+      
+      // More user-friendly error message
+      let errorMessage = 'Unable to calculate route. ';
+      if (e.message.includes('503')) {
+        errorMessage += 'Routing services are temporarily unavailable. Try again in a few moments.';
+      } else if (e.message.includes('network') || e.message.includes('Failed to fetch')) {
+        errorMessage += 'Please check your internet connection and try again.';
+      } else {
+        errorMessage += 'Please try again or use external mapping services.';
+      }
+      
+      alert(errorMessage);
     } finally {
       setRouteLoading(false);
     }
@@ -1133,11 +1142,11 @@ out center;`;
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex flex-col gap-2 shrink-0">
+                                  <div className="flex flex-col gap-2 shrink-0 min-w-[100px]">
                                     <Button 
                                       size="sm" 
                                       variant="outline" 
-                                      className={`text-xs h-8 ${
+                                      className={`text-xs h-7 ${
                                         selected?.type === 'sos' 
                                           ? 'border-red-300 text-red-700 hover:bg-red-50' 
                                           : ''
@@ -1148,14 +1157,14 @@ out center;`;
                                         try { document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
                                       }}
                                     >
-                                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                       </svg>
                                       View
                                     </Button>
                                     <Button 
                                       size="sm"
-                                      className={`text-xs h-8 ${
+                                      className={`text-xs h-7 ${
                                         selected?.type === 'sos'
                                           ? 'bg-red-600 hover:bg-red-700'
                                           : 'bg-blue-600 hover:bg-blue-700'
@@ -1165,17 +1174,37 @@ out center;`;
                                     >
                                       {routeLoading && selectedPoliceStation?.id === p.id ? (
                                         <>
-                                          <div className="w-3.5 h-3.5 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                          Loading...
+                                          <div className="w-3 h-3 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                          Route...
                                         </>
                                       ) : (
                                         <>
-                                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                           </svg>
-                                          ROUTE
+                                          Route
                                         </>
                                       )}
+                                    </Button>
+                                    <Button 
+                                      size="sm"
+                                      variant="outline"
+                                      className={`text-xs h-6 ${
+                                        selected?.type === 'sos'
+                                          ? 'border-red-300 text-red-700 hover:bg-red-50'
+                                          : 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                                      }`}
+                                      onClick={() => {
+                                        if (selected) {
+                                          const googleMapsUrl = `https://www.google.com/maps/dir/${selected.lat},${selected.lng}/${p.lat},${p.lng}`;
+                                          window.open(googleMapsUrl, '_blank');
+                                        }
+                                      }}
+                                    >
+                                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                      G.Maps
                                     </Button>
                                   </div>
                                 </div>
