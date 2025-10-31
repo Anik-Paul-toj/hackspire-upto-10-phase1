@@ -11,7 +11,7 @@ import { useUserProfileContext } from '@/contexts/UserProfileProvider';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -51,6 +51,38 @@ function MapCenterController({ center, zoom }: { center: [number, number]; zoom:
   return null;
 }
 
+function RouteBoundsController({ 
+  routeCoordinates, 
+  sosLocation, 
+  policeLocation 
+}: { 
+  routeCoordinates: [number, number][] | null;
+  sosLocation: { lat: number; lng: number } | null;
+  policeLocation: { lat: number; lng: number } | null;
+}) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (routeCoordinates && routeCoordinates.length > 0 && sosLocation && policeLocation) {
+      // Create bounds to fit both locations and the route
+      const allPoints: [number, number][] = [
+        [sosLocation.lat, sosLocation.lng],
+        [policeLocation.lat, policeLocation.lng],
+        ...routeCoordinates
+      ];
+      
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { 
+        padding: [50, 50], 
+        animate: true,
+        maxZoom: 15 
+      });
+    }
+  }, [routeCoordinates, sosLocation, policeLocation, map]);
+  
+  return null;
+}
+
 export default function AdminDashboard() {
   const { items: alerts } = useAlerts('all');
   const { items: locations } = useAllLocations();
@@ -77,6 +109,11 @@ export default function AdminDashboard() {
   const [nearbyPolice, setNearbyPolice] = useState<PolicePOI[] | null>(null);
   const [policeLoading, setPoliceLoading] = useState<boolean>(false);
   const [policeError, setPoliceError] = useState<string | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][] | null>(null);
+  const [selectedPoliceStation, setSelectedPoliceStation] = useState<PolicePOI | null>(null);
+  const [routeLoading, setRouteLoading] = useState<boolean>(false);
+  const [routeSummary, setRouteSummary] = useState<string | null>(null);
+  const [routeSummaryLoading, setRouteSummaryLoading] = useState<boolean>(false);
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -171,6 +208,10 @@ export default function AdminDashboard() {
       id: alert.id,
       details: `Status: ${alert.data.status}`
     });
+    // Clear route when viewing a new alert
+    setRouteCoordinates(null);
+    setSelectedPoliceStation(null);
+    setRouteSummary(null);
     setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
@@ -274,14 +315,111 @@ out center;`;
     }
   };
 
+  // Fetch route from Next.js API route (proxies OSRM to avoid CORS)
+  const fetchRoute = async (fromLat: number, fromLng: number, toLat: number, toLng: number) => {
+    try {
+      setRouteLoading(true);
+      setRouteCoordinates(null);
+      
+      // Use Next.js API route to proxy OSRM request (avoids CORS issues)
+      const url = `/api/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Route API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.coordinates && data.coordinates.length > 0) {
+        // Ensure we have more than 2 points (straight line) - if only 2, it's likely a fallback
+        if (data.coordinates.length > 2) {
+          setRouteCoordinates(data.coordinates);
+          console.log(`Route fetched successfully using ${data.service || 'unknown'} service with ${data.coordinates.length} waypoints`);
+        } else {
+          // If we only got 2 points, it's a straight line fallback - don't use it
+          throw new Error('Route service returned straight line instead of road-based route');
+        }
+      } else if (data.error) {
+        throw new Error(data.error);
+      } else {
+        throw new Error('No route coordinates received');
+      }
+    } catch (e: any) {
+      console.error('Error fetching route:', e);
+      // Don't show a straight line fallback - show an error instead
+      setRouteCoordinates(null);
+      alert(`Unable to calculate route: ${e.message}. Please try again or check your internet connection.`);
+    } finally {
+      setRouteLoading(false);
+    }
+  };
+
+  // Fetch AI-generated route summary using Groq
+  const fetchRouteSummary = async (tourist: { lat: number; lng: number }, policeStation: PolicePOI) => {
+    try {
+      setRouteSummaryLoading(true);
+      setRouteSummary(null);
+      
+      // Use the existing route-summary API
+      const response = await fetch('/api/route-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tourist: { lat: tourist.lat, lng: tourist.lng },
+          policeStations: [{
+            name: policeStation.name,
+            lat: policeStation.lat,
+            lng: policeStation.lng
+          }]
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.summary) {
+          setRouteSummary(data.summary);
+        }
+      }
+    } catch (e: any) {
+      console.error('Error fetching route summary:', e);
+      // Don't set error - just don't show summary if it fails
+    } finally {
+      setRouteSummaryLoading(false);
+    }
+  };
+
+  // Handle route button click
+  const handleRouteClick = async (policeStation: PolicePOI) => {
+    if (!selected || selected.type !== 'sos') return;
+    
+    setSelectedPoliceStation(policeStation);
+    setRouteSummary(null);
+    // Ensure the map card is in view for user
+    try { document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+    
+    // Fetch route coordinates
+    await fetchRoute(selected.lat, selected.lng, policeStation.lat, policeStation.lng);
+    
+    // Fetch AI-generated route summary
+    fetchRouteSummary({ lat: selected.lat, lng: selected.lng }, policeStation);
+  };
+
   // Refetch police stations only for SOS alerts
   useEffect(() => {
     if (selected && selected.type === 'sos' && isFinite(selected.lat) && isFinite(selected.lng)) {
       void fetchNearbyPolice(selected.lat, selected.lng);
+      // Clear route when SOS alert changes
+      setRouteCoordinates(null);
+      setSelectedPoliceStation(null);
+      setRouteSummary(null);
     } else {
       setNearbyPolice(null);
       setPoliceError(null);
       setPoliceLoading(false);
+      setRouteCoordinates(null);
+      setSelectedPoliceStation(null);
+      setRouteSummary(null);
     }
   }, [selected?.lat, selected?.lng, selected?.type]);
 
@@ -492,6 +630,13 @@ out center;`;
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     />
                     <MapCenterController center={mapCenter} zoom={mapZoom} />
+                    {routeCoordinates && selected && selectedPoliceStation && (
+                      <RouteBoundsController
+                        routeCoordinates={routeCoordinates}
+                        sosLocation={{ lat: selected.lat, lng: selected.lng }}
+                        policeLocation={{ lat: selectedPoliceStation.lat, lng: selectedPoliceStation.lng }}
+                      />
+                    )}
 
                     {/* SOS Alert Markers from Alerts Collection */}
                     {alerts.map(({ id, data }) => (
@@ -655,6 +800,27 @@ out center;`;
                       </Marker>
                     ))}
 
+                    {/* Route Polyline - Color coded based on distance */}
+                    {routeCoordinates && routeCoordinates.length > 0 && selected && selectedPoliceStation && (
+                      <Polyline
+                        positions={routeCoordinates}
+                        pathOptions={{
+                          color: (() => {
+                            if (!selectedPoliceStation) return '#ef4444';
+                            const dist = selectedPoliceStation.distanceMeters;
+                            // Color coding: green for close (< 2km), yellow for medium (2-5km), orange for far (5-8km), red for very far (> 8km)
+                            if (dist < 2000) return '#10b981'; // green
+                            if (dist < 5000) return '#eab308'; // yellow
+                            if (dist < 8000) return '#f97316'; // orange
+                            return '#ef4444'; // red
+                          })(),
+                          weight: 5,
+                          opacity: 0.8,
+                          dashArray: selectedPoliceStation.distanceMeters > 5000 ? '10, 5' : undefined, // Dashed for longer routes
+                        }}
+                      />
+                    )}
+
                     {/* Nearby Police Markers */}
                     {nearbyPolice && nearbyPolice.map(p => (
                       <Marker
@@ -817,6 +983,41 @@ out center;`;
                       </div>
                     )}
                     
+                    {/* AI-Generated Route Summary - Show when route is displayed */}
+                    {selected?.type === 'sos' && routeCoordinates && selectedPoliceStation && (
+                      <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <div className="font-medium text-blue-700">
+                            🤖 AI-Generated Route Summary
+                          </div>
+                          {selectedPoliceStation && (
+                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700">
+                              To: {selectedPoliceStation.name}
+                            </span>
+                          )}
+                        </div>
+                        {routeSummaryLoading ? (
+                          <div className="flex items-center gap-3 p-3 bg-white rounded">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            <div className="text-sm text-blue-700">Generating route summary...</div>
+                          </div>
+                        ) : routeSummary ? (
+                          <div className="bg-white p-4 rounded border border-blue-200">
+                            <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                              {routeSummary}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-600 italic">
+                            Route summary will appear here once the route is calculated.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Enhanced Emergency Response Section - Only for SOS Alerts */}
                     {selected?.type === 'sos' && (
                       <div className="mt-4">
@@ -944,6 +1145,7 @@ out center;`;
                                       onClick={() => {
                                         setMapCenter([p.lat, p.lng]);
                                         setMapZoom(16);
+                                        try { document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
                                       }}
                                     >
                                       <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -958,12 +1160,22 @@ out center;`;
                                           ? 'bg-red-600 hover:bg-red-700'
                                           : 'bg-blue-600 hover:bg-blue-700'
                                       }`}
-                                      onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
+                                      onClick={() => handleRouteClick(p)}
+                                      disabled={routeLoading && selectedPoliceStation?.id === p.id}
                                     >
-                                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                                      </svg>
-                                      {selected?.type === 'sos' ? 'RESPOND' : 'Navigate'}
+                                      {routeLoading && selectedPoliceStation?.id === p.id ? (
+                                        <>
+                                          <div className="w-3.5 h-3.5 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                          Loading...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                          </svg>
+                                          ROUTE
+                                        </>
+                                      )}
                                     </Button>
                                   </div>
                                 </div>
