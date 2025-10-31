@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import "leaflet/dist/leaflet.css";
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAllLocations } from '@/hooks/useAllLocations';
+import { useRealtimeSOS } from '@/hooks/useRealtimeSOS';
+import { useDevicesSOS, upsertDeviceSOSIntoFirestore } from '@/hooks/useDevicesSOS';
 import { dispatchAlert, resolveAlert } from '@/lib/alerts';
 import { useUserProfileContext } from '@/contexts/UserProfileProvider';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -32,7 +34,7 @@ type Tourist = {
   profileCompleted?: boolean;
   updatedAt?: any;
 };
-type LocationData = { latestLocation?: { lat: number; lng: number; source?: string; timestamp?: any } };
+type LocationData = { latestLocation?: { lat: number; lng: number; source?: string; timestamp?: any }; sos?: { active?: boolean; message?: string } };
 
 type PolicePOI = {
   id: string;
@@ -51,6 +53,8 @@ function MapCenterController({ center, zoom }: { center: [number, number]; zoom:
 export default function AdminDashboard() {
   const { items: alerts } = useAlerts('all');
   const { items: locations } = useAllLocations();
+  const { data: rtdbSOS } = useRealtimeSOS();
+  const { items: deviceSOS } = useDevicesSOS();
   const { user } = useUserProfileContext();
 
   const [tourists, setTourists] = useState<Tourist[]>([]);
@@ -84,6 +88,13 @@ export default function AdminDashboard() {
       return String(value);
     }
   };
+
+  useEffect(() => {
+    // Mirror device SOS into Firestore locations for consistent reads
+    if (deviceSOS && deviceSOS.length > 0) {
+      deviceSOS.forEach((s) => { void upsertDeviceSOSIntoFirestore(s); });
+    }
+  }, [deviceSOS]);
 
   useEffect(() => {
     const { db } = getFirebase();
@@ -504,63 +515,84 @@ out center;`;
                     />
                     <MapCenterController center={mapCenter} zoom={mapZoom} />
 
-                    {/* Tourist Markers */}
+                    {/* Tourist and SOS Markers from Firestore locations */}
                     {locations.map(({ id, data }) => {
                       const tourist = tourists.find(t => t.id === id);
                       const isSelected = selectedTourist === id;
-                      return data.latestLocation ? (
+                      if (!data.latestLocation) return null;
+                      const isSos = (data as any)?.sos?.active === true;
+                      return (
                         <Marker 
                           key={`tourist-${id}`} 
                           position={[data.latestLocation.lat, data.latestLocation.lng]} 
-                          icon={isSelected ? selectedTouristIcon : touristIcon}
+                          icon={isSos ? alertIcon : (isSelected ? selectedTouristIcon : touristIcon)}
                           eventHandlers={{ 
                             click: () => {
-                              setSelected({ 
-                                title: `${tourist?.name || id}`, 
-                                lat: data.latestLocation!.lat, 
-                                lng: data.latestLocation!.lng, 
-                                details: data.latestLocation?.source,
-                                type: 'tourist',
-                                id
+                              setSelected({
+                                title: isSos ? `SOS: ${tourist?.name || id}` : `${tourist?.name || id}`,
+                                lat: data.latestLocation!.lat,
+                                lng: data.latestLocation!.lng,
+                                details: isSos ? (data as any)?.sos?.message : data.latestLocation?.source,
+                                type: isSos ? 'sos' : 'tourist',
+                                id,
                               });
-                              setSelectedTourist(id);
+                              if (!isSos) setSelectedTourist(id); else setSelectedTourist(null);
                             }
                           }}
                         >
                           <Popup className="custom-popup">
                             <div className="p-2 min-w-[200px]">
-                              <div className="flex items-center gap-2 mb-2">
-                                {tourist?.photoURL ? (
-                                  <img src={tourist.photoURL} className="w-8 h-8 rounded-full" alt={tourist.name} />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-semibold">
-                                    {tourist?.name?.charAt(0)?.toUpperCase() || 'T'}
+                              {isSos ? (
+                                <>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                    <div className="font-semibold text-red-600">SOS ALERT</div>
                                   </div>
-                                )}
-                                <div>
-                                  <div className="font-semibold text-gray-900">{tourist?.name || id}</div>
-                                  <div className="text-xs text-gray-600">{tourist?.email}</div>
-                                </div>
-                              </div>
-                              <div className="text-xs text-gray-500 mb-2">
-                                Source: {data.latestLocation.source || 'Unknown'}
-                              </div>
-                              <div className="bg-green-50 p-2 rounded mb-2">
-                                <div className="text-xs font-mono text-green-800">
-                                  {data.latestLocation.lat.toFixed(6)}, {data.latestLocation.lng.toFixed(6)}
-                                </div>
-                              </div>
-                              <Button 
-                                size="sm" 
-                                onClick={() => copyToClipboard(`${data.latestLocation!.lat},${data.latestLocation!.lng}`)}
-                                className="w-full bg-green-600 hover:bg-green-700"
-                              >
-                                Copy Coordinates
-                              </Button>
+                                  {(data as any)?.sos?.message && (
+                                    <div className="text-sm text-gray-800 mb-2">{(data as any).sos.message}</div>
+                                  )}
+                                  <div className="bg-red-50 p-2 rounded mb-2">
+                                    <div className="text-xs font-mono text-red-800">
+                                      {data.latestLocation.lat.toFixed(6)}, {data.latestLocation.lng.toFixed(6)}
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {tourist?.photoURL ? (
+                                      <img src={tourist.photoURL} className="w-8 h-8 rounded-full" alt={tourist.name} />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-semibold">
+                                        {tourist?.name?.charAt(0)?.toUpperCase() || 'T'}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="font-semibold text-gray-900">{tourist?.name || id}</div>
+                                      <div className="text-xs text-gray-600">{tourist?.email}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mb-2">
+                                    Source: {data.latestLocation.source || 'Unknown'}
+                                  </div>
+                                  <div className="bg-green-50 p-2 rounded mb-2">
+                                    <div className="text-xs font-mono text-green-800">
+                                      {data.latestLocation.lat.toFixed(6)}, {data.latestLocation.lng.toFixed(6)}
+                                    </div>
+                                  </div>
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => copyToClipboard(`${data.latestLocation!.lat},${data.latestLocation!.lng}`)}
+                                    className="w-full bg-green-600 hover:bg-green-700"
+                                  >
+                                    Copy Coordinates
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </Popup>
                         </Marker>
-                      ) : null;
+                      );
                     })}
 
                     {/* SOS Alert Markers */}
@@ -637,6 +669,42 @@ out center;`;
                           </Popup>
                         </Marker>
                       ) : null
+                    ))}
+
+                    {/* RTDB SOS Marker (root) */}
+                    {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
+                      <Marker
+                        key="rtdb-sos"
+                        position={[rtdbSOS.latitude, rtdbSOS.longitude]}
+                        icon={alertIcon}
+                      >
+                        <Popup className="custom-popup">
+                          <div className="p-2 min-w-[220px]">
+                            <div className="font-semibold text-red-700 mb-1">RTDB SOS</div>
+                            {rtdbSOS.message && (
+                              <div className="text-sm text-gray-800 mb-2">{rtdbSOS.message}</div>
+                            )}
+                            <div className="font-mono text-xs bg-red-50 p-2 rounded">
+                              {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                            </div>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+
+                    {/* Device-level SOS markers */}
+                    {deviceSOS.map((s) => (
+                      <Marker key={`device-sos-${s.deviceId}`} position={[s.latitude, s.longitude]} icon={alertIcon}>
+                        <Popup className="custom-popup">
+                          <div className="p-2 min-w-[220px]">
+                            <div className="font-semibold text-red-700 mb-1">Device SOS • {s.deviceId}</div>
+                            {s.message && <div className="text-sm text-gray-800 mb-2">{s.message}</div>}
+                            <div className="font-mono text-xs bg-red-50 p-2 rounded">
+                              {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                            </div>
+                          </div>
+                        </Popup>
+                      </Marker>
                     ))}
 
                     {/* Nearby Police Markers */}
@@ -906,6 +974,47 @@ out center;`;
           </div>
 
           <aside className="space-y-6">
+            {/* RTDB SOS Panel */}
+            {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
+              <Card className="border-red-200 bg-red-50/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    RTDB SOS
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-gray-800 mb-2">{rtdbSOS.message || 'SOS Triggered'}</div>
+                  <div className="font-mono text-xs bg-white p-2 rounded border">
+                    {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Device SOS List */}
+            {deviceSOS.length > 0 && (
+              <Card className="border-red-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    Device SOS
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {deviceSOS.map((s) => (
+                    <div key={s.deviceId} className="text-xs bg-white border rounded p-2 flex items-center justify-between">
+                      <div className="font-medium text-red-700">{s.deviceId}</div>
+                      <div className="font-mono">{s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}</div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
             {/* Active Alerts Panel */}
             {alerts.filter(a => a.data.status === 'pending').length > 0 && (
               <Card className="border-red-200 bg-red-50/50">
