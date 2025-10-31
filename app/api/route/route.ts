@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
     const fromLng = searchParams.get('fromLng');
     const toLat = searchParams.get('toLat');
     const toLng = searchParams.get('toLng');
+    const waypoints = searchParams.get('waypoints'); // New parameter for waypoints
 
     if (!fromLat || !fromLng || !toLat || !toLng) {
       return NextResponse.json(
@@ -37,7 +38,21 @@ export async function GET(req: NextRequest) {
 
     // Try OSRM first (fast and free) - Fixed URL and improved error handling
     try {
-      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${fromLngNum},${fromLatNum};${toLngNum},${toLatNum}?overview=full&geometries=geojson&alternatives=false`;
+      // Build coordinates string for OSRM
+      let coordinatesStr = `${fromLngNum},${fromLatNum}`;
+      
+      // Add waypoints if provided
+      if (waypoints) {
+        const waypointCoords = waypoints.split('|').map(wp => {
+          const [lat, lng] = wp.split(',').map(Number);
+          return `${lng},${lat}`; // OSRM expects lng,lat format
+        });
+        coordinatesStr += ';' + waypointCoords.join(';');
+      }
+      
+      coordinatesStr += `;${toLngNum},${toLatNum}`;
+      
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordinatesStr}?overview=full&geometries=geojson&alternatives=false`;
       
       const osrmResponse = await fetch(osrmUrl, {
         method: 'GET',
@@ -73,47 +88,75 @@ export async function GET(req: NextRequest) {
     // Fallback: Simple direct route with waypoints (when external APIs fail)
     console.log('External routing services unavailable, generating direct route...');
     
-    // Calculate bearing for a more realistic path
-    const lat1Rad = (fromLatNum * Math.PI) / 180;
-    const lat2Rad = (toLatNum * Math.PI) / 180;
-    const deltaLon = ((toLngNum - fromLngNum) * Math.PI) / 180;
-    
-    const y = Math.sin(deltaLon) * Math.cos(lat2Rad);
-    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(deltaLon);
-    const bearing = (Math.atan2(y, x) * 180) / Math.PI;
-    
-    // Calculate distance using Haversine formula
-    const R = 6371000; // Earth's radius in meters
-    const dLat = lat2Rad - lat1Rad;
-    const dLon = deltaLon;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
-              Math.cos(lat1Rad) * Math.cos(lat2Rad) * 
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    
-    // Create intermediate waypoints for a more realistic route
-    const numWaypoints = Math.max(3, Math.min(10, Math.floor(distance / 1000))); // 1 waypoint per km, min 3, max 10
-    const coordinates: [number, number][] = [];
-    
-    for (let i = 0; i <= numWaypoints; i++) {
-      const fraction = i / numWaypoints;
-      const lat = fromLatNum + (toLatNum - fromLatNum) * fraction;
-      const lng = fromLngNum + (toLngNum - fromLngNum) * fraction;
-      
-      // Add slight curve for realism (roads are rarely perfectly straight)
-      const curveFactor = Math.sin(fraction * Math.PI) * 0.001; // Small curve
-      const adjustedLat = lat + curveFactor * Math.cos(bearing * Math.PI / 180);
-      const adjustedLng = lng + curveFactor * Math.sin(bearing * Math.PI / 180);
-      
-      coordinates.push([adjustedLat, adjustedLng]);
+    // Parse waypoints if provided
+    const waypointsList: [number, number][] = [];
+    if (waypoints) {
+      waypoints.split('|').forEach(wp => {
+        const [lat, lng] = wp.split(',').map(Number);
+        if (isFinite(lat) && isFinite(lng)) {
+          waypointsList.push([lat, lng]);
+        }
+      });
     }
+    
+    // Build full route with waypoints
+    const allPoints: [number, number][] = [
+      [fromLatNum, fromLngNum],
+      ...waypointsList,
+      [toLatNum, toLngNum]
+    ];
+    
+    const coordinates: [number, number][] = [];
+    let totalDistance = 0;
+    
+    // Generate route segments between each pair of points
+    for (let i = 0; i < allPoints.length - 1; i++) {
+      const [startLat, startLng] = allPoints[i];
+      const [endLat, endLng] = allPoints[i + 1];
+      
+      // Calculate distance for this segment
+      const lat1Rad = (startLat * Math.PI) / 180;
+      const lat2Rad = (endLat * Math.PI) / 180;
+      const deltaLat = lat2Rad - lat1Rad;
+      const deltaLon = ((endLng - startLng) * Math.PI) / 180;
+      
+      const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + 
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) * 
+                Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const segmentDistance = 6371000 * c; // Earth's radius in meters
+      totalDistance += segmentDistance;
+      
+      // Calculate bearing for this segment
+      const y = Math.sin(deltaLon) * Math.cos(lat2Rad);
+      const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(deltaLon);
+      const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+      
+      // Create intermediate points for this segment
+      const segmentWaypoints = Math.max(2, Math.min(5, Math.floor(segmentDistance / 1000))); // 1 waypoint per km
+      
+      for (let j = 0; j < segmentWaypoints; j++) {
+        const fraction = j / segmentWaypoints;
+        const lat = startLat + (endLat - startLat) * fraction;
+        const lng = startLng + (endLng - startLng) * fraction;
+        
+        // Add slight curve for realism (roads are rarely perfectly straight)
+        const curveFactor = Math.sin(fraction * Math.PI) * 0.0005; // Small curve
+        const adjustedLat = lat + curveFactor * Math.cos(bearing * Math.PI / 180);
+        const adjustedLng = lng + curveFactor * Math.sin(bearing * Math.PI / 180);
+        
+        coordinates.push([adjustedLat, adjustedLng]);
+      }
+    }
+    
+    // Add final destination
+    coordinates.push([toLatNum, toLngNum]);
 
     return NextResponse.json({
       success: true,
       coordinates,
-      distance: Math.round(distance),
-      duration: Math.round(distance / 13.89), // Assume ~50 km/h average speed
+      distance: Math.round(totalDistance),
+      duration: Math.round(totalDistance / 13.89), // Assume ~50 km/h average speed
       service: 'fallback-direct',
       note: 'Direct route generated - external routing services unavailable'
     });
