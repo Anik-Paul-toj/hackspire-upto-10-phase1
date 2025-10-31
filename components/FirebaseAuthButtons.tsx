@@ -16,12 +16,10 @@ export default function FirebaseAuthButtons() {
     try {
       setIsSigningIn(true);
       const { user, role } = await signInWithGoogle();
-      
-      // Route based on role
       if (role === 'admin') {
         router.push('/admin');
       } else {
-        router.push('/tourist');
+        alert('You are not an admin. Please contact an administrator to be granted access.');
       }
     } catch (error) {
       console.error('Sign in error:', error);
