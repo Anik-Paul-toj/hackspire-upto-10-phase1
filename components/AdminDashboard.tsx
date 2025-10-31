@@ -8,7 +8,7 @@ import { useUserProfileContext } from '@/contexts/UserProfileProvider';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -53,6 +53,12 @@ export default function AdminDashboard() {
   const [nearbyPolice, setNearbyPolice] = useState<PolicePOI[] | null>(null);
   const [policeLoading, setPoliceLoading] = useState<boolean>(false);
   const [policeError, setPoliceError] = useState<string | null>(null);
+  const [activePolice, setActivePolice] = useState<PolicePOI | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{
+    coords: [number, number][];
+    distanceMeters: number;
+    durationSeconds: number;
+  } | null>(null);
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -273,6 +279,48 @@ export default function AdminDashboard() {
       setPoliceLoading(false);
     }
   }, [selected?.lat, selected?.lng]);
+
+  const showPoliceOnMap = (p: PolicePOI) => {
+    setActivePolice(p);
+    setRouteInfo(null);
+    setMapCenter([p.lat, p.lng]);
+    setMapZoom(16);
+    setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
+
+  const routeToPolice = async (p: PolicePOI) => {
+    if (!selected || !isFinite(selected.lat) || !isFinite(selected.lng)) return;
+    try {
+      setActivePolice(p);
+      setRouteInfo(null);
+      // OSRM public routing service
+      const url = `https://router.project-osrm.org/route/v1/driving/${selected.lng},${selected.lat};${p.lng},${p.lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Routing error ${res.status}`);
+      const data = await res.json();
+      const route = data?.routes?.[0];
+      if (!route?.geometry?.coordinates) throw new Error('No route found');
+      const coords: [number, number][] = route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
+      setRouteInfo({
+        coords,
+        distanceMeters: Math.round(route.distance || 0),
+        durationSeconds: Math.round(route.duration || 0),
+      });
+      setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 50);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  function FitRouteBounds({ points }: { points: [number, number][] }) {
+    const map = useMap();
+    useEffect(() => {
+      if (!points || points.length === 0) return;
+      const bounds = L.latLngBounds(points.map(([lat, lng]) => L.latLng(lat, lng)));
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }, [map, points]);
+    return null;
+  }
 
   const handleDispatchAlert = async (alertId: string, classification: string) => {
     try {
@@ -642,16 +690,32 @@ export default function AdminDashboard() {
                         key={`police-${p.id}`}
                         position={[p.lat, p.lng]}
                         icon={policeIcon}
+                        eventHandlers={{
+                          click: () => {
+                            setActivePolice(p);
+                          }
+                        }}
                       >
                         <Popup className="custom-popup">
                           <div className="p-2 min-w-[200px]">
                             <div className="font-semibold text-blue-700 mb-1">{p.name}</div>
                             <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km away</div>
-                            <Button size="sm" className="mt-2 w-full" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}>Directions</Button>
+                            <div className="flex gap-2 mt-2">
+                              <Button size="sm" variant="outline" className="flex-1" onClick={() => showPoliceOnMap(p)}>View</Button>
+                              <Button size="sm" className="flex-1" onClick={() => routeToPolice(p)}>Route</Button>
+                            </div>
                           </div>
                         </Popup>
                       </Marker>
                     ))}
+
+                    {/* Route polyline when available */}
+                    {routeInfo && routeInfo.coords.length > 1 && (
+                      <>
+                        <Polyline positions={routeInfo.coords} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.9 }} />
+                        <FitRouteBounds points={routeInfo.coords} />
+                      </>
+                    )}
                   </MapContainer>
                 </div>
               </CardContent>
@@ -769,8 +833,8 @@ export default function AdminDashboard() {
                                   <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km</div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => window.open(`https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}`, '_blank')}>View</Button>
-                                  <Button size="sm" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}>Route</Button>
+                                  <Button size="sm" variant="outline" onClick={() => showPoliceOnMap(p)}>View</Button>
+                                  <Button size="sm" onClick={() => routeToPolice(p)}>Route</Button>
                                 </div>
                               </li>
                             ))}
