@@ -17,7 +17,7 @@ export default function AdminPage() {
       return;
     }
     if (profile && profile.role !== 'admin') {
-      router.replace('/tourist');
+      router.replace('/');
     }
   }, [user, profile, userLoading, profileLoading, router]);
 
