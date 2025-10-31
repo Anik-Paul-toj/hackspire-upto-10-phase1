@@ -2,7 +2,6 @@
 import dynamic from 'next/dynamic';
 
 const StatusDashboard = dynamic(() => import('@/components/StatusDashboard'), { ssr: false });
-const MeshPanel = dynamic(() => import('@/components/MeshPanel'), { ssr: false });
 
 export default function StatusPage() {
   return (
@@ -13,11 +12,10 @@ export default function StatusPage() {
             System Status Dashboard
           </h1>
           <p className="text-sm sm:text-base text-gray-600">
-            Monitor your safety profile, location, and emergency mesh network
+            Monitor your safety profile and location
           </p>
         </div>
         <StatusDashboard />
-        <MeshPanel />
       </div>
     </main>
   );

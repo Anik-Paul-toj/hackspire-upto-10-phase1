@@ -1,11 +1,13 @@
 import { initializeApp, type FirebaseApp, getApps, getApp } from 'firebase/app';
 import { getAuth, type Auth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, type Firestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAnalytics, type Analytics, isSupported } from 'firebase/analytics';
 
 type FirebaseClients = {
   app: FirebaseApp;
   auth: Auth;
   db: Firestore;
+  analytics?: Analytics;
 };
 
 const firebaseConfig = {
@@ -26,6 +28,7 @@ export function getFirebase(): FirebaseClients {
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  let analytics: Analytics | undefined;
 
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
     try {
@@ -41,9 +44,15 @@ export function getFirebase(): FirebaseClients {
     void setPersistence(auth, browserLocalPersistence).catch(() => {
       // ignore persistence errors (e.g., in private mode)
     });
+    // Initialize Analytics only in supported environments (browsers)
+    void isSupported().then((ok) => {
+      if (ok) {
+        try { analytics = getAnalytics(app); } catch {}
+      }
+    });
   }
 
-  clients = { app, auth, db };
+  clients = { app, auth, db, analytics };
   return clients;
 }
 

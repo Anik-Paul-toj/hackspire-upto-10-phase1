@@ -74,15 +74,7 @@ export default function SeedPage() {
         status: "success",
       });
 
-      // 6) mesh_network/{roomID}
-      await setDoc(doc(db, "mesh_network", "room_seed_1"), {
-        participants: [user.uid],
-        messages: [
-          { sender: user.uid, message: "Seed hello", timestamp: new Date() },
-        ],
-        active: true,
-        createdAt: serverTimestamp(),
-      });
+      // 6) mesh seed removed
 
       setStatus("Seeded successfully. Check Firestore.");
     } catch (e: any) {

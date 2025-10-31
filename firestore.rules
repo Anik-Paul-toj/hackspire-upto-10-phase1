@@ -62,8 +62,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /mesh_network/{roomId} {
-      allow read, write: if isSignedIn();
+    // SOS alerts created by clients (used by offline WebRTC relay)
+    match /sos_alerts/{alertId} {
+      // DEMO-OPEN: allow anyone to read and write SOS alerts
+      // WARNING: For production, tighten this to authenticated-only and field validation
+      allow read, write: if true;
     }
   }
 }
