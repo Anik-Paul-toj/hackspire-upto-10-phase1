@@ -58,10 +58,14 @@ const Hero = () => {
           <Button 
             size="lg" 
             variant="outline" 
-            className="text-green-600 border-green-400 px-4 sm:px-5 py-3 rounded-md w-full sm:w-auto"
+            className="relative text-green-600 border-2 border-green-500 px-4 sm:px-5 py-3 rounded-xl w-full sm:w-auto bg-linear-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 hover:border-green-600 hover:text-green-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
             onClick={() => router.push('/admin')}
           >
+            <svg className="mr-2 w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
             Go to Admin Dashboard
+            <div className="absolute inset-0 rounded-xl bg-linear-to-r from-green-400/20 to-emerald-400/20 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
           </Button>
         </div>
 

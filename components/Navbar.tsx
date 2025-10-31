@@ -49,7 +49,7 @@ const Navbar = () => {
                 </span>
                 <button
                   onClick={() => signOutUser()}
-                  className="inline-flex items-center rounded-md border px-3 py-2 hover:bg-gray-50"
+                  className="inline-flex items-center rounded-md border px-3 py-2 bg-red-600 text-white hover:bg-red-500 hover:text-white"
                 >
                   Sign out
                 </button>

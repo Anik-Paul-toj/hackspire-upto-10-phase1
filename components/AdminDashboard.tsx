@@ -659,24 +659,24 @@ export default function AdminDashboard() {
             )}
 
             {/* Enhanced Tourists Panel */}
-            <Card className="border-green-200 overflow-hidden">
-              <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
-                <div className="px-5 py-4">
+            <Card className="border-green-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
+              <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
+                <div className="px-5 py-6">
                   <CardTitle className="text-white flex items-center justify-between">
                     <span>Tourist Management</span>
                     <span className="text-sm bg-green-800/30 px-2 py-1 rounded-full">
                       {stats.touristsWithLocation}/{stats.totalTourists}
                     </span>
                   </CardTitle>
-                  <CardDescription className="text-green-100 mt-1">
+                  <CardDescription className="text-green-100 mt-2">
                     Real-time location tracking
                   </CardDescription>
                 </div>
               </CardHeader>
               
-              <CardContent className="p-0">
+              <CardContent className="p-0 flex flex-col flex-1 min-h-0">
                 {/* Filter Controls */}
-                <div className="p-4 border-b bg-gray-50">
+                <div className="p-4 border-b bg-gray-50 shrink-0">
                   <div className="flex gap-2">
                     <Button
                       size="sm"
@@ -705,7 +705,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="max-h-[calc(100vh-400px)] overflow-y-auto">
+                <div className="flex-1 overflow-y-auto min-h-0">
                   {filteredTourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
