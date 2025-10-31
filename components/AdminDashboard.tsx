@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import "leaflet/dist/leaflet.css";
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAllLocations } from '@/hooks/useAllLocations';
@@ -59,6 +59,23 @@ export default function AdminDashboard() {
     distanceMeters: number;
     durationSeconds: number;
   } | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Cache results for 5 minutes per coarse key
+  const policeCacheRef = useRef<Map<string, { ts: number; data: PolicePOI[] }>>(new Map());
+  const debounceRef = useRef<any>(null);
+
+  // Small helpers
+  const abortableFetch = (input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}) => {
+    const { timeoutMs = 2500, ...rest } = init;
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(input, { ...rest, signal: controller.signal }).finally(() => clearTimeout(to));
+  };
+
+  const toKey = (lat: number, lng: number) => `${lat.toFixed(2)},${lng.toFixed(2)}`; // ~1km bucket
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -155,129 +172,228 @@ export default function AdminDashboard() {
     return R * c;
   };
 
-  // Fetch nearest police station (prefer Google Places rankby=distance; fallback to Overpass)
+  // Multi-provider nearest police fetch with parallel queries and overall cap
   const fetchNearbyPolice = async (lat: number, lng: number) => {
     try {
       setPoliceLoading(true);
       setPoliceError(null);
       setNearbyPolice(null);
-      const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      setAiSummary(null);
+      setAiError(null);
 
-      // Try Google Places Nearby Search with rankby=distance (no radius) for multiple nearest results
-      if (googleKey) {
-        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent('police station')}&key=${googleKey}`;
-        const gRes = await fetch(url);
-        if (!gRes.ok) throw new Error(`Google Places error ${gRes.status}`);
-        const gData = await gRes.json();
-        if (Array.isArray(gData.results) && gData.results.length > 0) {
-          const pois: PolicePOI[] = gData.results
-            .slice(0, 10)
-            .map((r: any) => {
-              const poiLat = Number(r?.geometry?.location?.lat);
-              const poiLon = Number(r?.geometry?.location?.lng);
-              if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-              return {
-                id: String(r.place_id || `${poiLat},${poiLon}`),
-                name: r.name || 'Police Station',
-                lat: poiLat,
-                lng: poiLon,
-                distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-              } as PolicePOI;
-            })
-            .filter(Boolean)
-            .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters);
-          setNearbyPolice(pois);
-          return;
-        }
-        // If Google responds but has no results, fall through to Overpass
+      const key = toKey(lat, lng);
+      const now = Date.now();
+      const cached = policeCacheRef.current.get(key);
+      if (cached && now - cached.ts < 300_000) {
+        setNearbyPolice(cached.data);
+        return;
       }
 
-      // Fallback: Overpass API with escalating radius; ensure at least one result if available in region
-      const fetchOverpass = async (r: number) => {
-        const q = `[
-          out:json
-        ];
-        (
-          node["amenity"="police"](around:${r},${lat},${lng});
-          way["amenity"="police"](around:${r},${lat},${lng});
-          relation["amenity"="police"](around:${r},${lat},${lng});
-        );
-        out center 50;`;
-        const resp = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: q
-        });
-        if (!resp.ok) throw new Error(`Overpass error ${resp.status}`);
-        const d = await resp.json();
-        const list: PolicePOI[] = (d.elements || [])
-          .map((el: any) => {
-            const center = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
-            const poiLat = Number(center.lat);
-            const poiLon = Number(center.lon);
+      const providers: Array<() => Promise<PolicePOI[]>> = [];
+
+      // Google Places (if key provided)
+      const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (googleKey) {
+        providers.push(async () => {
+          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent('police station')}&key=${googleKey}`;
+          const res = await abortableFetch(url, { timeoutMs: 2500 });
+          if (!res.ok) throw new Error(`google:${res.status}`);
+          const data = await res.json();
+          const list: (PolicePOI | null)[] = (data.results || []).slice(0, 10).map((r: any) => {
+            const poiLat = Number(r?.geometry?.location?.lat);
+            const poiLon = Number(r?.geometry?.location?.lng);
             if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
-            const name = (el.tags && (el.tags.name || el.tags.operator || 'Police Station')) || 'Police Station';
             return {
-              id: String(el.id),
-              name,
+              id: String(r.place_id || `${poiLat},${poiLon}`),
+              name: r.name || 'Police Station',
               lat: poiLat,
               lng: poiLon,
               distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
             } as PolicePOI;
-          })
-          .filter(Boolean)
-          .sort((a: PolicePOI, b: PolicePOI) => a.distanceMeters - b.distanceMeters);
-        return list;
-      };
-
-      const radii = [5000, 10000, 50000, 150000, 300000];
-      let pois: PolicePOI[] = [];
-      for (const r of radii) {
-        pois = await fetchOverpass(r);
-        if (pois.length > 0) break;
+          });
+          const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
+          if (pois.length === 0) throw new Error('google:empty');
+          return pois;
+        });
       }
 
-      if (pois.length === 0) {
-        // Final fallback: Nominatim search (no key) to get one closest result
-        const nomiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent('police station')}&limit=1&addressdetails=0&accept-language=en&lat=${lat}&lon=${lng}`;
-        const nRes = await fetch(nomiUrl, { headers: { 'User-Agent': 'hackspire-app/1.0' } as any });
-        if (nRes.ok) {
-          const nData = await nRes.json();
-          if (Array.isArray(nData) && nData.length > 0) {
-            const n = nData[0];
-            const poiLat = Number(n.lat);
-            const poiLon = Number(n.lon);
-            if (isFinite(poiLat) && isFinite(poiLon)) {
-              pois = [{
-                id: String(n.osm_id || `${poiLat},${poiLon}`),
-                name: n.display_name?.split(',')?.[0] || 'Police Station',
+      // Photon (open provider)
+      providers.push(async () => {
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent('police')}&lat=${lat}&lon=${lng}&limit=10`;
+        const res = await abortableFetch(url, { timeoutMs: 2000 });
+        if (!res.ok) throw new Error(`photon:${res.status}`);
+        const data = await res.json();
+        const list: (PolicePOI | null)[] = (data.features || []).map((f: any) => {
+          const poiLat = Number(f?.geometry?.coordinates?.[1]);
+          const poiLon = Number(f?.geometry?.coordinates?.[0]);
+          if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
+          const name = f?.properties?.name || 'Police Station';
+          return {
+            id: String(f?.properties?.osm_id || `${poiLat},${poiLon}`),
+            name,
+            lat: poiLat,
+            lng: poiLon,
+            distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+          } as PolicePOI;
+        });
+        const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
+        if (pois.length === 0) throw new Error('photon:empty');
+        return pois;
+      });
+
+      // Overpass mirrors with backoff
+      providers.push(async () => {
+        const endpoints = [
+          'https://overpass-api.de/api/interpreter',
+          'https://overpass.kumi.systems/api/interpreter'
+        ];
+        const radii = [5000, 10000, 50000, 150000];
+        for (const r of radii) {
+          for (const ep of endpoints) {
+            const q = `[
+              out:json
+            ];
+            (
+              node["amenity"="police"](around:${r},${lat},${lng});
+              way["amenity"="police"](around:${r},${lat},${lng});
+              relation["amenity"="police"](around:${r},${lat},${lng});
+            );
+            out center 40;`;
+            const res = await abortableFetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+              body: q,
+              timeoutMs: 2500
+            });
+            if (res.status === 429) {
+              await new Promise(r => setTimeout(r, 500));
+              continue;
+            }
+            if (!res.ok) continue;
+            const d = await res.json();
+            const list: (PolicePOI | null)[] = (d.elements || []).map((el: any) => {
+              const center = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
+              const poiLat = Number(center.lat);
+              const poiLon = Number(center.lon);
+              if (!isFinite(poiLat) || !isFinite(poiLon)) return null;
+              const name = (el.tags && (el.tags.name || el.tags.operator || 'Police Station')) || 'Police Station';
+              return {
+                id: String(el.id),
+                name,
                 lat: poiLat,
                 lng: poiLon,
                 distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
-              }];
-            }
+              } as PolicePOI;
+            });
+            const pois = (list.filter(Boolean) as PolicePOI[]).sort((a, b) => a.distanceMeters - b.distanceMeters);
+            if (pois.length > 0) return pois;
           }
         }
-      }
+        throw new Error('overpass:none');
+      });
 
-      // Ensure at least one is returned if any source produced a coordinate
-      setNearbyPolice(pois.length > 0 ? pois.slice(0, 20) : []);
+      // Nominatim single hit
+      providers.push(async () => {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent('police station')}&limit=1&addressdetails=0&accept-language=en&lat=${lat}&lon=${lng}`;
+        const res = await abortableFetch(url, { timeoutMs: 2000, headers: { 'User-Agent': 'hackspire-app/1.0' } as any });
+        if (!res.ok) throw new Error(`nominatim:${res.status}`);
+        const arr = await res.json();
+        if (!Array.isArray(arr) || arr.length === 0) throw new Error('nominatim:empty');
+        const n = arr[0];
+        const poiLat = Number(n.lat);
+        const poiLon = Number(n.lon);
+        if (!isFinite(poiLat) || !isFinite(poiLon)) throw new Error('nominatim:bad');
+        return [{
+          id: String(n.osm_id || `${poiLat},${poiLon}`),
+          name: n.display_name?.split(',')?.[0] || 'Police Station',
+          lat: poiLat,
+          lng: poiLon,
+          distanceMeters: Math.round(distanceMeters(lat, lng, poiLat, poiLon))
+        }];
+      });
+
+      // Run providers in parallel and pick the first that returns any results, with overall cap
+      const overall = Promise.race([
+        (async () => {
+          for (const batch of [providers]) {
+            try {
+              const results = await Promise.any(batch.map(fn => fn()));
+              const top = results.slice(0, 20);
+              setNearbyPolice(top);
+              policeCacheRef.current.set(key, { ts: now, data: top });
+              return;
+            } catch {}
+          }
+          throw new Error('No providers returned results');
+        })(),
+        (async () => { await new Promise(r => setTimeout(r, 3500)); throw new Error('timeout'); })()
+      ]);
+
+      await overall;
     } catch (e: any) {
       setPoliceError(e?.message || 'Failed to load nearby police stations');
+      setNearbyPolice([]);
     } finally {
       setPoliceLoading(false);
     }
   };
 
-  // Refetch police stations when selection changes
+  // Normalize the AI service URL
+  function normalizeRouteSummaryUrl(): string {
+    const raw = process.env.NEXT_PUBLIC_ROUTE_SUMMARY_URL || 'http://localhost:4010/summary';
+    if (raw.startsWith(':')) return `http://localhost${raw}`;
+    if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
+    return raw;
+  }
+
+  // Generate AI summary with fallback to Next.js proxy if direct fails
+  const generateAISummary = async () => {
+    try {
+      if (!selected || !isFinite(selected.lat) || !isFinite(selected.lng)) return;
+      if (!nearbyPolice || nearbyPolice.length === 0) return;
+      setAiLoading(true);
+      setAiError(null);
+      setAiSummary(null);
+      const body = {
+        tourist: { lat: selected.lat, lng: selected.lng },
+        policeStations: nearbyPolice.slice(0, 5).map(p => ({ name: p.name, lat: p.lat, lng: p.lng }))
+      };
+
+      const directUrl = normalizeRouteSummaryUrl();
+      let res: Response | null = null;
+      try {
+        res = await fetch(directUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } catch {
+        res = null;
+      }
+      if (!res || !res.ok) {
+        // Fallback to Next.js proxy endpoint
+        res = await fetch('/api/route-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (!res.ok) throw new Error(`AI service error ${res.status}`);
+      const data = await res.json();
+      setAiSummary(String(data?.summary || ''));
+    } catch (e: any) {
+      setAiError(e?.message || 'Failed to generate AI summary');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Debounced refetch on selection changes
   useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (selected && isFinite(selected.lat) && isFinite(selected.lng)) {
-      void fetchNearbyPolice(selected.lat, selected.lng);
+      debounceRef.current = setTimeout(() => { void fetchNearbyPolice(selected.lat, selected.lng); }, 250);
     } else {
       setNearbyPolice(null);
       setPoliceError(null);
       setPoliceLoading(false);
+      setAiSummary(null);
+      setAiError(null);
     }
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [selected?.lat, selected?.lng]);
 
   const showPoliceOnMap = (p: PolicePOI) => {
@@ -825,20 +941,40 @@ export default function AdminDashboard() {
                           <div className="p-3 text-sm text-gray-600">No police stations found nearby.</div>
                         )}
                         {!policeLoading && !policeError && nearbyPolice && nearbyPolice.length > 0 && (
-                          <ul className="max-h-60 overflow-y-auto divide-y">
-                            {nearbyPolice.map((p) => (
-                              <li key={p.id} className="p-3 flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="font-medium text-gray-900">{p.name}</div>
-                                  <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => showPoliceOnMap(p)}>View</Button>
-                                  <Button size="sm" onClick={() => routeToPolice(p)}>Route</Button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                          <>
+                            <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+                              <div className="text-xs text-gray-600">
+                                Top {Math.min(nearbyPolice.length, 5)} results shown for AI summary
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" disabled={aiLoading} onClick={generateAISummary}>
+                                  {aiLoading ? 'Analyzing…' : 'AI Summary'}
+                                </Button>
+                              </div>
+                            </div>
+                            {aiError && (
+                              <div className="p-3 text-sm text-red-600">{aiError}</div>
+                            )}
+                            {aiSummary && (
+                              <div className="p-3 text-sm text-gray-800 whitespace-pre-wrap border-b">
+                                {aiSummary}
+                              </div>
+                            )}
+                            <ul className="max-h-60 overflow-y-auto divide-y">
+                              {nearbyPolice.map((p) => (
+                                <li key={p.id} className="p-3 flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-medium text-gray-900">{p.name}</div>
+                                    <div className="text-xs text-gray-600">~{(p.distanceMeters/1000).toFixed(2)} km</div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => showPoliceOnMap(p)}>View</Button>
+                                    <Button size="sm" onClick={() => routeToPolice(p)}>Route</Button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </>
                         )}
                       </div>
                     </div>
