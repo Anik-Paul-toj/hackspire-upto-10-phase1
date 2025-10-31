@@ -8,7 +8,7 @@ const GetApp = () => {
   const router = useRouter();
   
   return (
-    <section className="flex items-center justify-center w-full flex-col pb-[50px] sm:pb-[100px] mx-auto">
+    <section id="get-app" className="flex items-center justify-center w-full flex-col pb-[50px] sm:pb-[100px] mx-auto">
       <div className="relative flex w-full flex-col justify-between gap-16 sm:gap-32 overflow-hidden bg-green-700 bg-[url('/pattern.png')] bg-cover bg-center bg-no-repeat px-4 sm:px-1 py-8 sm:py-24 text-white sm:flex-row lg:px-5 xl:max-h-[598px] 2xl:rounded-[20px] mx-4 sm:mx-6 lg:mx-25">
         <div className="z-20 flex w-full flex-1 flex-col items-start justify-center gap-8 sm:gap-12 ml-0 sm:ml-20">
           <h2 className="font-bold text-3xl sm:text-4xl md:text-5xl lg:bold-64 xl:max-w-[320px] leading-tight">

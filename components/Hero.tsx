@@ -49,9 +49,9 @@ const Hero = () => {
           <Button 
             size="lg" 
             className="bg-green-600 text-white px-4 sm:px-5 py-3 rounded-md shadow-md hover:brightness-95 transition w-full sm:w-auto"
-            onClick={() => router.push('/map')}
+            onClick={() => router.push('/#get-app')}
           >
-            Start Safety Journey
+            Install Tourist App
             <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
 
@@ -59,18 +59,9 @@ const Hero = () => {
             size="lg" 
             variant="outline" 
             className="text-green-600 border-green-400 px-4 sm:px-5 py-3 rounded-md w-full sm:w-auto"
+            onClick={() => router.push('/admin')}
           >
-            How we work?
-          </Button>
-
-          <Button
-            size="lg"
-            variant="ghost"
-            className="text-black bg-white px-4 sm:px-5 py-3 rounded-md w-full sm:w-auto"
-            onClick={handleSeeLocation}
-          >
-            <span className="hidden sm:inline">See your current location</span>
-            <span className="sm:hidden">Current Location</span>
+            Go to Admin Dashboard
           </Button>
         </div>
 

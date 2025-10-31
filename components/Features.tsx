@@ -4,7 +4,7 @@ import React from 'react'
 
 const Features = () => {
   return (
-    <section className="flex-col flex items-center justify-center overflow-hidden bg-feature-bg bg-center bg-no-repeat py-24">
+    <section id="features" className="flex-col flex items-center justify-center overflow-hidden bg-feature-bg bg-center bg-no-repeat py-24">
       <div className="mx-auto max-w-[1440px] px-6 lg:px-20 3xl:px-0 relative w-full flex justify-end">
         <div className="flex flex-1 lg:min-h-[900px]">
           <Image

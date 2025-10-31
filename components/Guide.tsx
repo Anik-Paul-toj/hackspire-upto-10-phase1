@@ -3,7 +3,7 @@ import React from 'react'
 
 const Guide = () => {
   return (
-    <section className="flex items-center justify-center flex-col">
+    <section id="guide" className="flex items-center justify-center flex-col">
       <div className="px-6 lg:px-20 3xl:px-0 mx-auto max-w-[1440px] w-full pb-24">
         <Image src="/camp.svg" alt="camp" width={50} height={50} />
         <p className="uppercase font-semibold text-lg -mt-2 mb-3 text-green-500">

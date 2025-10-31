@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "./ui/button";
 import dynamic from "next/dynamic";
 const LoginRoleButtons = dynamic(() => import("@/components/LoginRoleButtons"), { ssr: false });
-const RoleSwitcher = dynamic(() => import("@/components/RoleSwitcher"), { ssr: false });
 const UserAvatar = dynamic(() => import("@/components/UserAvatar"), { ssr: false });
 import { useState } from "react";
 import { useUserProfileContext } from "@/contexts/UserProfileProvider";
@@ -42,13 +41,12 @@ const Navbar = () => {
         <div className="flex items-center gap-3">
           {!userLoading && (
             user ? (
-              // Desktop only: Show user profile and role switcher (hidden on mobile)
+              // Desktop only: Show user profile (hidden on mobile)
               <div className="hidden lg:flex items-center gap-3">
                 <UserAvatar user={user} size={32} />
                 <span className="text-sm">
                   {user.displayName ?? user.email}
                 </span>
-                <RoleSwitcher />
                 <button
                   onClick={() => signOutUser()}
                   className="inline-flex items-center rounded-md border px-3 py-2 hover:bg-gray-50"
@@ -108,7 +106,6 @@ const Navbar = () => {
                         {user.displayName ?? user.email}
                       </span>
                     </div>
-                    <RoleSwitcher isMobile={true} />
                     <button
                       onClick={() => signOutUser()}
                       className="inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors"

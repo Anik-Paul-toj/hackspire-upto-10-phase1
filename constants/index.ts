@@ -2,10 +2,10 @@
 export const NAV_LINKS = [
   { href: '/', key: 'home', label: 'Home' },
   { href: '/status', key: 'status', label: 'Status' },
-  { href: '/', key: 'how_guardio_work', label: 'How Guardio Works?' },
-  { href: '/', key: 'features', label: 'Features' },
-  { href: '/', key: 'safety_zones', label: 'Safety Zones' },
-  { href: '/', key: 'contact_us', label: 'Contact Us' },
+  { href: '/#guide', key: 'guide', label: 'Guide' },
+  { href: '/#how-it-works', key: 'how_it_works', label: 'How it works' },
+  { href: '/#features', key: 'features', label: 'Features' },
+  { href: '/#get-app', key: 'get_app', label: 'Get the App' },
 ];
 
 // CAMP SECTION
