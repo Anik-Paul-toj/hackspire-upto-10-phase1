@@ -1625,62 +1625,8 @@ out center;`;
                   </MapContainer>
                 </div>
 
-                {/* Control Panel for Unsafe Zones and Routes */}
-                <div className="absolute top-4 right-4 z-1000 bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg">
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="unsafe-zones-admin"
-                        checked={showUnsafeZones}
-                        onChange={(e) => setShowUnsafeZones(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="unsafe-zones-admin" className="text-sm font-medium text-gray-700">
-                        Show Unsafe Zones
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="safe-route-admin"
-                        checked={showSafeRoute}
-                        onChange={(e) => setShowSafeRoute(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="safe-route-admin" className="text-sm font-medium text-gray-700">
-                        Show Safe Route
-                      </label>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Legend */}
-                <div className="absolute bottom-4 left-4 z-1000 bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Legend</h3>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-red-600"></div>
-                      <span>Unsafe Zones</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-1 bg-green-600"></div>
-                      <span>Safe Route (avoiding unsafe zones)</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-1 bg-blue-600"></div>
-                      <span>Original Route</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                      <span>Police Stations</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                      <span>SOS Alerts</span>
-                    </div>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
 
