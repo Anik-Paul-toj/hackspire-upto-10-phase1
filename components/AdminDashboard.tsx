@@ -71,7 +71,6 @@ export default function AdminDashboard() {
   } | null>(null);
   const [selectedTourist, setSelectedTourist] = useState<string | null>(null);
   const [profileModal, setProfileModal] = useState<Tourist | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [dispatchForm, setDispatchForm] = useState<{ alertId: string; classification: string; notes: string }>(
     { alertId: '', classification: 'Medical Emergency', notes: '' }
   );
@@ -116,25 +115,14 @@ export default function AdminDashboard() {
 
   const findLocation = (id: string) => locations.find(l => l.id === id)?.data as LocationData | undefined;
 
-  // Statistics calculations
+  // Statistics calculations - simplified without location counts
   const stats = useMemo(() => {
     const activeAlerts = alerts.filter(a => a.data.status === 'pending').length;
     const totalTourists = tourists.length;
-    const touristsWithLocation = tourists.filter(t => findLocation(t.id)?.latestLocation).length;
     const verifiedAlerts = alerts.filter(a => a.data.status === 'verified').length;
     
-    return { activeAlerts, totalTourists, touristsWithLocation, verifiedAlerts };
-  }, [alerts, tourists, locations]);
-
-  // Filtered tourists
-  const filteredTourists = useMemo(() => {
-    return tourists.filter(t => {
-      const hasLocation = !!findLocation(t.id)?.latestLocation;
-      if (filterStatus === 'active') return hasLocation;
-      if (filterStatus === 'inactive') return !hasLocation;
-      return true;
-    });
-  }, [tourists, locations, filterStatus]);
+    return { activeAlerts, totalTourists, verifiedAlerts };
+  }, [alerts, tourists]);
 
   const openTouristModal = (id: string) => {
     const t = tourists.find(u => u.id === id);
@@ -157,11 +145,12 @@ export default function AdminDashboard() {
       });
       setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 100);
     } else {
+      // Don't set invalid coordinates for tourists without GPS
       setSelected({ 
         title: name ?? id, 
         lat: 0, 
         lng: 0, 
-        details: 'No GPS available',
+        details: 'No GPS available - Tourist has not shared location data',
         type: 'tourist',
         id
       });
@@ -285,16 +274,16 @@ out center;`;
     }
   };
 
-  // Refetch police stations when selection changes
+  // Refetch police stations only for SOS alerts
   useEffect(() => {
-    if (selected && isFinite(selected.lat) && isFinite(selected.lng)) {
+    if (selected && selected.type === 'sos' && isFinite(selected.lat) && isFinite(selected.lng)) {
       void fetchNearbyPolice(selected.lat, selected.lng);
     } else {
       setNearbyPolice(null);
       setPoliceError(null);
       setPoliceLoading(false);
     }
-  }, [selected?.lat, selected?.lng]);
+  }, [selected?.lat, selected?.lng, selected?.type]);
 
   const handleDispatchAlert = async (alertId: string, classification: string) => {
     try {
@@ -418,7 +407,7 @@ out center;`;
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card className="border-green-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -435,8 +424,6 @@ out center;`;
               </CardContent>
             </Card>
 
-          
-
             <Card className="border-green-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -447,23 +434,6 @@ out center;`;
                   <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                     <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-green-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">With GPS</p>
-                    <p className="text-2xl font-bold text-blue-600">{stats.touristsWithLocation}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
                 </div>
@@ -497,7 +467,7 @@ out center;`;
                   <div>
                     <CardTitle className="text-white text-lg">Real-time Monitoring Map</CardTitle>
                     <CardDescription className="text-green-100 mt-1">
-                      Live tracking • {stats.touristsWithLocation} tourists • {stats.activeAlerts} active alerts
+                      Live tracking • {stats.totalTourists} tourists • {stats.activeAlerts} active alerts
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-4">
@@ -523,87 +493,7 @@ out center;`;
                     />
                     <MapCenterController center={mapCenter} zoom={mapZoom} />
 
-                    {/* Tourist and SOS Markers from Firestore locations */}
-                    {locations.map(({ id, data }) => {
-                      const tourist = tourists.find(t => t.id === id);
-                      const isSelected = selectedTourist === id;
-                      if (!data.latestLocation) return null;
-                      const isSos = (data as any)?.sos?.active === true;
-                      return (
-                        <Marker 
-                          key={`tourist-${id}`} 
-                          position={[data.latestLocation.lat, data.latestLocation.lng]} 
-                          icon={isSos ? alertIcon : (isSelected ? selectedTouristIcon : touristIcon)}
-                          eventHandlers={{ 
-                            click: () => {
-                              setSelected({
-                                title: isSos ? `SOS: ${tourist?.name || id}` : `${tourist?.name || id}`,
-                                lat: data.latestLocation!.lat,
-                                lng: data.latestLocation!.lng,
-                                details: isSos ? (data as any)?.sos?.message : data.latestLocation?.source,
-                                type: isSos ? 'sos' : 'tourist',
-                                id,
-                              });
-                              if (!isSos) setSelectedTourist(id); else setSelectedTourist(null);
-                            }
-                          }}
-                        >
-                          <Popup className="custom-popup">
-                            <div className="p-2 min-w-[200px]">
-                              {isSos ? (
-                                <>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                    <div className="font-semibold text-red-600">SOS ALERT</div>
-                                  </div>
-                                  {(data as any)?.sos?.message && (
-                                    <div className="text-sm text-gray-800 mb-2">{(data as any).sos.message}</div>
-                                  )}
-                                  <div className="bg-red-50 p-2 rounded mb-2">
-                                    <div className="text-xs font-mono text-red-800">
-                                      {data.latestLocation.lat.toFixed(6)}, {data.latestLocation.lng.toFixed(6)}
-                                    </div>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    {tourist?.photoURL ? (
-                                      <img src={tourist.photoURL} className="w-8 h-8 rounded-full" alt={tourist.name} />
-                                    ) : (
-                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-semibold">
-                                        {tourist?.name?.charAt(0)?.toUpperCase() || 'T'}
-                                      </div>
-                                    )}
-                                    <div>
-                                      <div className="font-semibold text-gray-900">{tourist?.name || id}</div>
-                                      <div className="text-xs text-gray-600">{tourist?.email}</div>
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-gray-500 mb-2">
-                                    Source: {data.latestLocation.source || 'Unknown'}
-                                  </div>
-                                  <div className="bg-green-50 p-2 rounded mb-2">
-                                    <div className="text-xs font-mono text-green-800">
-                                      {data.latestLocation.lat.toFixed(6)}, {data.latestLocation.lng.toFixed(6)}
-                                    </div>
-                                  </div>
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => copyToClipboard(`${data.latestLocation!.lat},${data.latestLocation!.lng}`)}
-                                    className="w-full bg-green-600 hover:bg-green-700"
-                                  >
-                                    Copy Coordinates
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </Popup>
-                        </Marker>
-                      );
-                    })}
-
-                    {/* SOS Alert Markers */}
+                    {/* SOS Alert Markers from Alerts Collection */}
                     {alerts.map(({ id, data }) => (
                       data.location && data.status !== 'resolved' ? (
                         <Marker 
@@ -635,81 +525,131 @@ out center;`;
                                 </div>
                               </div>
                               
-                              <div className="space-y-2 mb-3">
-                                <div>
-                                  <span className="text-xs text-gray-500">User:</span>
-                                  <div className="font-medium">{data.userName || 'Unknown'}</div>
-                                </div>
-                                {data.message && (
-                                  <div>
-                                    <span className="text-xs text-gray-500">Message:</span>
-                                    <div className="text-sm">{data.message}</div>
-                                  </div>
-                                )}
-                                <div>
-                                  <span className="text-xs text-gray-500">Location:</span>
-                                  <div className="font-mono text-xs bg-red-50 p-2 rounded">
-                                    {data.location.lat.toFixed(6)}, {data.location.lng.toFixed(6)}
-                                  </div>
+                              <div className="mb-3">
+                                <div className="font-medium text-gray-900">{data.userName}</div>
+                                <div className="text-sm text-gray-600 mt-1">{data.message}</div>
+                              </div>
+                              
+                              <div className="bg-red-50 p-2 rounded mb-3">
+                                <div className="text-xs font-mono text-red-800">
+                                  {data.location.lat.toFixed(6)}, {data.location.lng.toFixed(6)}
                                 </div>
                               </div>
                               
-                              <div className="flex gap-2">
-                                {data.status === 'pending' && (
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => handleDispatchAlert(id, 'emergency')}
-                                    className="flex-1 bg-green-600 hover:bg-green-700"
-                                  >
-                                    Dispatch
-                                  </Button>
-                                )}
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleResolveAlert(id)}
-                                  className="flex-1"
-                                >
-                                  Resolve
-                                </Button>
-                              </div>
+                              <Button 
+                                size="sm" 
+                                onClick={() => copyToClipboard(`${data.location!.lat},${data.location!.lng}`)}
+                                className="w-full bg-red-600 hover:bg-red-700"
+                              >
+                                Copy Emergency Coordinates
+                              </Button>
                             </div>
                           </Popup>
                         </Marker>
                       ) : null
                     ))}
 
-                    {/* RTDB SOS Marker (root) */}
+                    {/* Enhanced RTDB SOS Marker */}
                     {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
                       <Marker
                         key="rtdb-sos"
                         position={[rtdbSOS.latitude, rtdbSOS.longitude]}
                         icon={alertIcon}
+                        eventHandlers={{
+                          click: () => {
+                            setSelected({
+                              title: 'Real-time SOS Alert',
+                              lat: rtdbSOS.latitude as number,
+                              lng: rtdbSOS.longitude as number,
+                              type: 'sos',
+                              details: rtdbSOS.message || 'Emergency assistance needed'
+                            });
+                            setMapCenter([rtdbSOS.latitude as number, rtdbSOS.longitude as number]);
+                            setMapZoom(15);
+                          }
+                        }}
                       >
                         <Popup className="custom-popup">
                           <div className="p-2 min-w-[220px]">
-                            <div className="font-semibold text-red-700 mb-1">RTDB SOS</div>
+                            <div className="font-semibold text-red-700 mb-1">🚨 RTDB SOS</div>
                             {rtdbSOS.message && (
                               <div className="text-sm text-gray-800 mb-2">{rtdbSOS.message}</div>
                             )}
-                            <div className="font-mono text-xs bg-red-50 p-2 rounded">
-                              {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                            <div className="bg-red-100 p-2 rounded mb-3">
+                              <div className="text-xs text-red-600 font-medium mb-1">EMERGENCY COORDINATES</div>
+                              <div className="font-mono text-sm text-red-800 font-bold">
+                                {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                              </div>
                             </div>
+                            <Button 
+                              size="sm" 
+                              className="w-full bg-red-600 hover:bg-red-700"
+                              onClick={() => {
+                                setSelected({
+                                  title: 'Real-time SOS Alert',
+                                  lat: rtdbSOS.latitude as number,
+                                  lng: rtdbSOS.longitude as number,
+                                  type: 'sos',
+                                  details: rtdbSOS.message || 'Emergency assistance needed'
+                                });
+                                setMapCenter([rtdbSOS.latitude as number, rtdbSOS.longitude as number]);
+                                setMapZoom(15);
+                              }}
+                            >
+                              📍 Find Emergency Help
+                            </Button>
                           </div>
                         </Popup>
                       </Marker>
                     )}
 
-                    {/* Device-level SOS markers */}
+                    {/* Enhanced Device-level SOS markers */}
                     {deviceSOS.map((s) => (
-                      <Marker key={`device-sos-${s.deviceId}`} position={[s.latitude, s.longitude]} icon={alertIcon}>
+                      <Marker 
+                        key={`device-sos-${s.deviceId}`} 
+                        position={[s.latitude, s.longitude]} 
+                        icon={alertIcon}
+                        eventHandlers={{
+                          click: () => {
+                            setSelected({
+                              title: `Device SOS: ${s.deviceId}`,
+                              lat: s.latitude,
+                              lng: s.longitude,
+                              type: 'sos',
+                              details: s.message || 'Device emergency signal detected'
+                            });
+                            setMapCenter([s.latitude, s.longitude]);
+                            setMapZoom(15);
+                          }
+                        }}
+                      >
                         <Popup className="custom-popup">
                           <div className="p-2 min-w-[220px]">
-                            <div className="font-semibold text-red-700 mb-1">Device SOS • {s.deviceId}</div>
+                            <div className="font-semibold text-red-700 mb-1">🚨 Device SOS • {s.deviceId}</div>
                             {s.message && <div className="text-sm text-gray-800 mb-2">{s.message}</div>}
-                            <div className="font-mono text-xs bg-red-50 p-2 rounded">
-                              {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                            <div className="bg-red-100 p-2 rounded mb-3">
+                              <div className="text-xs text-red-600 font-medium mb-1">DEVICE COORDINATES</div>
+                              <div className="font-mono text-sm text-red-800 font-bold">
+                                {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                              </div>
                             </div>
+                            <Button 
+                              size="sm" 
+                              className="w-full bg-red-600 hover:bg-red-700"
+                              onClick={() => {
+                                setSelected({
+                                  title: `Device SOS: ${s.deviceId}`,
+                                  lat: s.latitude,
+                                  lng: s.longitude,
+                                  type: 'sos',
+                                  details: s.message || 'Device emergency signal detected'
+                                });
+                                setMapCenter([s.latitude, s.longitude]);
+                                setMapZoom(15);
+                              }}
+                            >
+                              📍 Find Emergency Help
+                            </Button>
                           </div>
                         </Popup>
                       </Marker>
@@ -750,97 +690,172 @@ out center;`;
               <CardContent>
                 {selected ? (
                   <div className="space-y-4">
-                    <div className={`p-4 rounded-lg border-l-4 ${
-                      selected.type === 'sos' ? 'bg-red-50 border-red-500' : 'bg-green-50 border-green-500'
-                    }`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className={`w-2 h-2 rounded-full ${
-                              selected.type === 'sos' ? 'bg-red-500' : 'bg-green-500'
-                            }`}></div>
-                            <span className={`text-xs font-medium ${
-                              selected.type === 'sos' ? 'text-red-700' : 'text-green-700'
-                            }`}>
-                              {selected.type === 'sos' ? 'SOS ALERT' : 'TOURIST'}
-                            </span>
-                          </div>
-                          <div className="font-semibold text-gray-900 mb-1">{selected.title}</div>
-                          {selected.details && (
-                            <div className="text-sm text-gray-600 mb-2">{selected.details}</div>
-                          )}
+                    {/* Enhanced SOS Alert Display */}
+                    {selected.type === 'sos' && (
+                      <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
+                          <span className="text-red-800 font-bold text-lg">🚨 EMERGENCY SOS ALERT</span>
                         </div>
-                      </div>
-                      
-                      <div className="bg-white p-3 rounded border mt-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">Coordinates</div>
-                            <div className="font-mono text-sm text-gray-800">
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div className="bg-white p-3 rounded border">
+                            <div className="text-xs text-red-600 font-medium mb-1">EMERGENCY COORDINATES</div>
+                            <div className="font-mono text-lg text-red-800 font-bold">
                               {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
                             </div>
                           </div>
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">Timestamp</div>
-                            <div className="text-sm text-gray-800">
-                              {selected.type === 'tourist' ? (
-                                (() => {
-                                  const loc = selected.id ? findLocation(selected.id) : undefined;
-                                  return formatTimestamp(loc?.latestLocation?.timestamp);
-                                })()
-                              ) : (
-                                (() => {
-                                  const alert = alerts.find(a => a.id === selected.id);
-                                  return formatTimestamp(alert?.data?.timestamp);
-                                })()
-                              )}
+                          <div className="bg-white p-3 rounded border">
+                            <div className="text-xs text-red-600 font-medium mb-1">ALERT STATUS</div>
+                            <div className="text-lg text-red-800 font-bold">
+                              {(() => {
+                                const alert = alerts.find(a => a.id === selected.id);
+                                return alert?.data?.status?.toUpperCase() || 'ACTIVE';
+                              })()}
                             </div>
                           </div>
-                          <div className="flex items-end gap-2">
-                            <Button 
-                              size="sm"
-                              onClick={() => copyToClipboard(`${selected.lat},${selected.lng}`)}
-                              className={selected.type === 'sos' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}
-                            >
-                              Copy Coords
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`, '_blank')}
-                            >
-                              Open in Maps
-                            </Button>
+                        </div>
+
+                        <div className="bg-white p-3 rounded border mb-4">
+                          <div className="text-xs text-red-600 font-medium mb-1">ALERT DETAILS</div>
+                          <div className="text-sm text-gray-800">
+                            <strong>Reported by:</strong> {(() => {
+                              const alert = alerts.find(a => a.id === selected.id);
+                              return alert?.data?.userName || 'Unknown';
+                            })()}
+                          </div>
+                          <div className="text-sm text-gray-800">
+                            <strong>Message:</strong> {(() => {
+                              const alert = alerts.find(a => a.id === selected.id);
+                              return alert?.data?.message || 'Emergency assistance needed';
+                            })()}
+                          </div>
+                          <div className="text-sm text-gray-800">
+                            <strong>Time:</strong> {(() => {
+                              const alert = alerts.find(a => a.id === selected.id);
+                              return formatTimestamp(alert?.data?.timestamp);
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            onClick={() => copyToClipboard(`${selected.lat},${selected.lng}`)}
+                          >
+                            📋 Copy Emergency Coords
+                          </Button>
+                          <Button 
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                            onClick={() => window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`, '_blank')}
+                          >
+                            🗺️ Open in Maps
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Regular Tourist Location Display */}
+                    {selected.type !== 'sos' && (
+                      <div className={`p-4 rounded-lg border-l-4 bg-green-50 border-green-500`}>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-xs font-medium text-green-700">TOURIST</span>
+                            </div>
+                            <div className="font-semibold text-gray-900 mb-1">{selected.title}</div>
+                            {selected.details && (
+                              <div className="text-sm text-gray-600 mb-2">{selected.details}</div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white p-3 rounded border mt-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Coordinates</div>
+                              <div className="font-mono text-sm text-gray-800">
+                                {selected.lat === 0 && selected.lng === 0 
+                                  ? 'No GPS data available' 
+                                  : `${selected.lat.toFixed(6)}, ${selected.lng.toFixed(6)}`
+                                }
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Timestamp</div>
+                              <div className="text-sm text-gray-800">
+                                {(() => {
+                                  const loc = selected.id ? findLocation(selected.id) : undefined;
+                                  return formatTimestamp(loc?.latestLocation?.timestamp);
+                                })()}
+                              </div>
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <Button 
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => copyToClipboard(`${selected.lat},${selected.lng}`)}
+                                disabled={selected.lat === 0 && selected.lng === 0}
+                              >
+                                Copy Coords
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`, '_blank')}
+                                disabled={selected.lat === 0 && selected.lng === 0}
+                              >
+                                Open in Maps
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                     
-                    {/* Nearby Police Stations List */}
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 2a6 6 0 016 6c0 6-6 10-6 10S4 14 4 8a6 6 0 016-6zm0 8a2 2 0 100-4 2 2 0 000 4z" />
-                          </svg>
-                          <div className="font-medium text-gray-900">Nearby Police Stations</div>
-                          {!policeLoading && nearbyPolice && nearbyPolice.length > 0 && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
-                              {nearbyPolice.length} found
-                            </span>
-                          )}
-                        </div>
+                    {/* Enhanced Emergency Response Section - Only for SOS Alerts */}
+                    {selected?.type === 'sos' && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 2a6 6 0 016 6c0 6-6 10-6 10S4 14 4 8a6 6 0 016-6zm0 8a2 2 0 100-4 2 2 0 000 4z" />
+                            </svg>
+                            <div className="font-medium text-red-700">
+                              🚨 EMERGENCY RESPONSE TEAMS
+                            </div>
+                            {!policeLoading && nearbyPolice && nearbyPolice.length > 0 && (
+                              <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                                {nearbyPolice.length} units available
+                              </span>
+                            )}
+                          </div>
                         {selected && (
                           <div className="text-xs text-gray-500">
                             Within 10 km • {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
                           </div>
                         )}
                       </div>
-                      <div className="rounded-lg border bg-white shadow-sm">
+                      <div className={`rounded-lg border shadow-sm ${
+                        selected?.type === 'sos' ? 'bg-red-50 border-red-200' : 'bg-white'
+                      }`}>
                         {policeLoading && (
                           <div className="p-4 flex items-center gap-3">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                            <div className="text-sm text-gray-600">Searching within 10 km radius...</div>
+                            <div className={`animate-spin rounded-full h-5 w-5 border-b-2 ${
+                              selected?.type === 'sos' ? 'border-red-600' : 'border-blue-600'
+                            }`}></div>
+                            <div className={`text-sm ${
+                              selected?.type === 'sos' ? 'text-red-700' : 'text-gray-600'
+                            }`}>
+                              {selected?.type === 'sos' 
+                                ? '🚨 Locating emergency response teams...' 
+                                : 'Searching within 10 km radius...'
+                              }
+                            </div>
                           </div>
                         )}
                         {policeError && (
@@ -858,28 +873,57 @@ out center;`;
                             <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
-                            <div className="text-sm text-gray-600">No police stations found within 10 km.</div>
-                            <div className="text-xs text-gray-500 mt-1">Try selecting a different location</div>
+                            <div className={`text-sm ${
+                              selected?.type === 'sos' ? 'text-red-700 font-medium' : 'text-gray-600'
+                            }`}>
+                              {selected?.type === 'sos' 
+                                ? '⚠️ No emergency response teams found within 10 km'
+                                : 'No police stations found within 10 km.'
+                              }
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {selected?.type === 'sos' 
+                                ? 'Consider expanding search radius or contacting nearest emergency services'
+                                : 'Try selecting a different location'
+                              }
+                            </div>
                           </div>
                         )}
                         {!policeLoading && !policeError && nearbyPolice && nearbyPolice.length > 0 && (
                           <ul className="max-h-80 overflow-y-auto divide-y">
                             {nearbyPolice.map((p, idx) => (
-                              <li key={p.id} className="p-4 hover:bg-gray-50 transition-colors">
+                              <li key={p.id} className={`p-4 transition-colors ${
+                                selected?.type === 'sos' 
+                                  ? 'hover:bg-red-100 border-l-2 border-red-300' 
+                                  : 'hover:bg-gray-50'
+                              }`}>
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-start gap-3">
-                                      <div className="shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold text-sm">
+                                      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                        selected?.type === 'sos'
+                                          ? 'bg-red-100 text-red-700'
+                                          : 'bg-blue-100 text-blue-700'
+                                      }`}>
                                         {idx + 1}
                                       </div>
                                       <div className="flex-1">
-                                        <div className="font-medium text-gray-900 mb-1">{p.name}</div>
+                                        <div className={`font-medium mb-1 ${
+                                          selected?.type === 'sos' ? 'text-red-900' : 'text-gray-900'
+                                        }`}>
+                                          {selected?.type === 'sos' && idx === 0 && '🚨 '}{p.name}
+                                        </div>
                                         <div className="flex items-center gap-3 text-xs text-gray-600">
                                           <div className="flex items-center gap-1">
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                             </svg>
-                                            <span className="font-medium">{(p.distanceMeters/1000).toFixed(2)} km away</span>
+                                            <span className={`font-medium ${
+                                              selected?.type === 'sos' && idx === 0 ? 'text-red-700' : ''
+                                            }`}>
+                                              {(p.distanceMeters/1000).toFixed(2)} km away
+                                              {selected?.type === 'sos' && idx === 0 && ' - CLOSEST'}
+                                            </span>
                                           </div>
                                           <div className="flex items-center gap-1 font-mono text-[10px]">
                                             {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
@@ -892,27 +936,34 @@ out center;`;
                                     <Button 
                                       size="sm" 
                                       variant="outline" 
-                                      className="text-xs h-8"
+                                      className={`text-xs h-8 ${
+                                        selected?.type === 'sos' 
+                                          ? 'border-red-300 text-red-700 hover:bg-red-50' 
+                                          : ''
+                                      }`}
                                       onClick={() => {
                                         setMapCenter([p.lat, p.lng]);
                                         setMapZoom(16);
                                       }}
                                     >
                                       <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                       </svg>
                                       View
                                     </Button>
                                     <Button 
                                       size="sm"
-                                      className="bg-blue-600 hover:bg-blue-700 text-xs h-8"
+                                      className={`text-xs h-8 ${
+                                        selected?.type === 'sos'
+                                          ? 'bg-red-600 hover:bg-red-700'
+                                          : 'bg-blue-600 hover:bg-blue-700'
+                                      }`}
                                       onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
                                     >
                                       <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                       </svg>
-                                      Route
+                                      {selected?.type === 'sos' ? 'RESPOND' : 'Navigate'}
                                     </Button>
                                   </div>
                                 </div>
@@ -922,6 +973,7 @@ out center;`;
                         )}
                       </div>
                     </div>
+                    )}
 
                     {selected.type === 'tourist' && selected.id && (() => {
                       const t = tourists.find(u => u.id === selected.id);
@@ -982,42 +1034,113 @@ out center;`;
           </div>
 
           <aside className="space-y-6">
-            {/* RTDB SOS Panel */}
+            {/* Enhanced RTDB SOS Panel */}
             {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
-              <Card className="border-red-200 bg-red-50/50">
+              <Card className="border-red-400 bg-red-50 shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                    <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
-                    RTDB SOS
+                    🚨 REAL-TIME SOS ALERT
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-sm text-gray-800 mb-2">{rtdbSOS.message || 'SOS Triggered'}</div>
-                  <div className="font-mono text-xs bg-white p-2 rounded border">
-                    {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                  <div className="bg-white p-3 rounded border border-red-200 mb-3">
+                    <div className="text-sm font-medium text-red-800 mb-2">
+                      {rtdbSOS.message || 'Emergency assistance needed'}
+                    </div>
+                    <div className="bg-red-100 p-2 rounded mb-3">
+                      <div className="text-xs text-red-600 font-medium mb-1">EMERGENCY COORDINATES</div>
+                      <div className="font-mono text-sm text-red-800 font-bold">
+                        {rtdbSOS.latitude.toFixed(6)}, {rtdbSOS.longitude.toFixed(6)}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 flex-1 text-xs"
+                        onClick={() => {
+                          setSelected({
+                            title: 'Real-time SOS Alert',
+                            lat: rtdbSOS.latitude as number,
+                            lng: rtdbSOS.longitude as number,
+                            type: 'sos',
+                            details: rtdbSOS.message || 'Emergency assistance needed'
+                          });
+                          setMapCenter([rtdbSOS.latitude as number, rtdbSOS.longitude as number]);
+                          setMapZoom(15);
+                        }}
+                      >
+                        📍 View Location & Find Help
+                      </Button>
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-100"
+                        onClick={() => copyToClipboard(`${rtdbSOS.latitude},${rtdbSOS.longitude}`)}
+                      >
+                        📋
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Device SOS List */}
+            {/* Enhanced Device SOS List */}
             {deviceSOS.length > 0 && (
-              <Card className="border-red-200">
+              <Card className="border-red-400 bg-red-50 shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                    <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
-                    Device SOS
+                    🚨 DEVICE SOS ALERTS ({deviceSOS.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   {deviceSOS.map((s) => (
-                    <div key={s.deviceId} className="text-xs bg-white border rounded p-2 flex items-center justify-between">
-                      <div className="font-medium text-red-700">{s.deviceId}</div>
-                      <div className="font-mono">{s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}</div>
+                    <div key={s.deviceId} className="bg-white border-2 border-red-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-red-800">Device: {s.deviceId}</div>
+                        <div className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">ACTIVE</div>
+                      </div>
+                      <div className="bg-red-100 p-2 rounded mb-3">
+                        <div className="text-xs text-red-600 font-medium mb-1">DEVICE COORDINATES</div>
+                        <div className="font-mono text-sm text-red-800 font-bold">
+                          {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm"
+                          className="bg-red-600 hover:bg-red-700 flex-1 text-xs"
+                          onClick={() => {
+                            setSelected({
+                              title: `Device SOS: ${s.deviceId}`,
+                              lat: s.latitude,
+                              lng: s.longitude,
+                              type: 'sos',
+                              details: s.message || 'Device emergency signal detected'
+                            });
+                            setMapCenter([s.latitude, s.longitude]);
+                            setMapZoom(15);
+                          }}
+                        >
+                          📍 Locate & Respond
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-700 hover:bg-red-100"
+                          onClick={() => copyToClipboard(`${s.latitude},${s.longitude}`)}
+                        >
+                          📋
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </CardContent>
@@ -1068,7 +1191,7 @@ out center;`;
                   <CardTitle className="text-white flex items-center justify-between">
                     <span>Tourist Management</span>
                     <span className="text-sm bg-green-800/30 px-2 py-1 rounded-full">
-                      {stats.touristsWithLocation}/{stats.totalTourists}
+                      {stats.totalTourists} total
                     </span>
                   </CardTitle>
                   <CardDescription className="text-green-100 mt-2">
@@ -1080,124 +1203,127 @@ out center;`;
               <CardContent className="p-0 flex flex-col flex-1 min-h-0">
                 {/* Filter Controls */}
                 <div className="p-4 border-b bg-gray-50 shrink-0">
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={filterStatus === 'all' ? 'default' : 'outline'}
-                      onClick={() => setFilterStatus('all')}
-                      className={filterStatus === 'all' ? 'bg-green-600 hover:bg-green-700' : ''}
-                    >
-                      All ({tourists.length})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={filterStatus === 'active' ? 'default' : 'outline'}
-                      onClick={() => setFilterStatus('active')}
-                      className={filterStatus === 'active' ? 'bg-green-600 hover:bg-green-700' : ''}
-                    >
-                      With GPS ({stats.touristsWithLocation})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={filterStatus === 'inactive' ? 'default' : 'outline'}
-                      onClick={() => setFilterStatus('inactive')}
-                      className={filterStatus === 'inactive' ? 'bg-green-600 hover:bg-green-700' : ''}
-                    >
-                      No GPS ({stats.totalTourists - stats.touristsWithLocation})
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">All Tourists ({tourists.length})</h3>
+                    <div className="text-sm text-gray-500">
+                      Showing all registered users
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto min-h-0">
-                  {filteredTourists.map(tourist => {
+                <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+                  {tourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
                     return (
-                      <div 
+                      <Card 
                         key={tourist.id} 
-                        className={`p-4 border-b last:border-b-0 hover:bg-gray-50 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-green-50 border-green-200' : ''
+                        className={`transition-all duration-200 hover:shadow-md cursor-pointer border ${
+                          isSelected ? 'ring-2 ring-green-500 border-green-200 bg-green-50' : 'hover:border-green-300'
                         }`}
                         onClick={() => viewTourist(tourist.id, tourist.name)}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="shrink-0 relative">
-                            {tourist.photoURL ? (
-                              <img 
-                                src={tourist.photoURL} 
-                                className="w-12 h-12 rounded-full border-2 border-gray-200 shadow-sm" 
-                                alt={tourist.name} 
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center font-semibold text-lg shadow-sm">
-                                {tourist.name?.charAt(0)?.toUpperCase() || 'T'}
-                              </div>
-                            )}
-                            {loc?.latestLocation && (
-                              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
-                                <div className="w-2 h-2 bg-white rounded-full"></div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className="font-medium text-gray-900 truncate">{tourist.name}</div>
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-4">
+                            <div className="shrink-0 relative">
+                              {tourist.photoURL ? (
+                                <img 
+                                  src={tourist.photoURL} 
+                                  className="w-14 h-14 rounded-full border-2 border-gray-200 shadow-sm object-cover" 
+                                  alt={tourist.name} 
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded-full bg-linear-to-br from-green-500 to-green-600 text-white flex items-center justify-center font-bold text-xl shadow-sm">
+                                  {tourist.name?.charAt(0)?.toUpperCase() || 'T'}
+                                </div>
+                              )}
                               {tourist.verified && (
-                                <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
+                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500 truncate mb-2">{tourist.email}</div>
                             
-                            <div className="flex items-center justify-between">
-                              {loc?.latestLocation ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="text-xs text-green-600 font-medium">GPS Active</div>
-                                  <div className="text-xs font-mono text-gray-500">
-                                    {loc.latestLocation.lat.toFixed(3)}, {loc.latestLocation.lng.toFixed(3)}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-gray-900 truncate text-lg">{tourist.name || 'Unnamed User'}</h3>
+                                    {tourist.verified && (
+                                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                                        Verified
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600 truncate mb-3">{tourist.email}</p>
+                                  
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {tourist.nationality && (
+                                      <span className="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+                                        </svg>
+                                        {tourist.nationality}
+                                      </span>
+                                    )}
+                                    {tourist.age && (
+                                      <span className="inline-flex items-center px-2.5 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-medium">
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        Age {tourist.age}
+                                      </span>
+                                    )}
+                                    {tourist.gender && (
+                                      <span className="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        {tourist.gender}
+                                      </span>
+                                    )}
+                                    {tourist.profileCompleted && (
+                                      <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                        Complete Profile
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
-                              ) : (
-                                <div className="text-xs text-gray-400">No GPS signal</div>
-                              )}
-                              
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                className="text-green-600 hover:text-green-700 h-6 px-2"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  viewTourist(tourist.id, tourist.name);
-                                }}
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="h-6 px-2"
-                                onClick={(e) => { e.stopPropagation(); openTouristModal(tourist.id); }}
-                              >
-                                Profile
-                              </Button>
+                                
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="shrink-0 ml-4 hover:bg-green-50 hover:border-green-300"
+                                  onClick={(e) => { e.stopPropagation(); openTouristModal(tourist.id); }}
+                                >
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  View Details
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
                     );
                   })}
                   
-                  {filteredTourists.length === 0 && (
-                    <div className="p-8 text-center">
-                      <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                      </svg>
-                      <p className="text-gray-500 text-sm">No tourists match this filter</p>
+                  {tourists.length === 0 && (
+                    <div className="p-12 text-center">
+                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No tourists registered yet</h3>
+                      <p className="text-gray-500 text-sm">When users register as tourists, they will appear here with their profile information.</p>
                     </div>
                   )}
                 </div>
@@ -1277,7 +1403,7 @@ out center;`;
                 <textarea
                   value={dispatchForm.notes}
                   onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
-                  className="w-full border rounded px-3 py-2 text-sm min-h-[80px]"
+                  className="w-full border rounded px-3 py-2 text-sm min-h-20"
                   placeholder="Add context for responders…"
                 />
               </div>
@@ -1291,87 +1417,201 @@ out center;`;
           </Card>
         </div>
       </div>
-      {/* Tourist Profile Modal */}
+      {/* Enhanced Tourist Profile Modal */}
       {profileModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setProfileModal(null)}></div>
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <div className="flex items-center gap-3">
-                {(() => {
-                  const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
-                  const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
-                  if (isHttp) {
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="bg-linear-to-r from-green-600 to-green-700 text-white px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {(() => {
+                    const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
+                    const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
+                    if (isHttp) {
+                      return (
+                        <img src={src as string} className="w-16 h-16 rounded-full border-3 border-white shadow-lg" alt={profileModal.fullName || profileModal.name || 'User'} />
+                      );
+                    }
                     return (
-                      <img src={src as string} className="w-10 h-10 rounded-full border" alt={profileModal.fullName || profileModal.name || 'User'} />
+                      <div className="w-16 h-16 rounded-full bg-white text-green-600 flex items-center justify-center font-bold text-2xl shadow-lg">
+                        {(profileModal.fullName || profileModal.name || 'T').charAt(0).toUpperCase()}
+                      </div>
                     );
-                  }
-                  return (
-                    <div className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-semibold">
-                      {(profileModal.fullName || profileModal.name || 'T').charAt(0).toUpperCase()}
-                    </div>
-                  );
-                })()}
-                <div>
-                  <div className="font-semibold text-gray-900">{profileModal.fullName || profileModal.name || 'Tourist'}</div>
-                  <div className="text-xs text-gray-600">{profileModal.email}</div>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setProfileModal(null)}>Close</Button>
-            </div>
-            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-gray-500">Age</div>
-                <div className="text-sm text-gray-900">{profileModal.age ?? '—'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Gender</div>
-                <div className="text-sm text-gray-900">{profileModal.gender ?? '—'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Nationality</div>
-                <div className="text-sm text-gray-900">{profileModal.nationality ?? '—'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Passport Number</div>
-                <div className="text-sm text-gray-900 break-all">{profileModal.passportNumber ?? '—'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Government ID</div>
-                <div className="text-sm text-gray-900 break-all">{profileModal.governmentId ?? '—'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Profile Completed</div>
-                <div className="text-sm text-gray-900">{profileModal.profileCompleted ? 'Yes' : 'No'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Created At</div>
-                <div className="text-sm text-gray-900">{formatTimestamp(profileModal.createdAt)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Updated At</div>
-                <div className="text-sm text-gray-900">{formatTimestamp(profileModal.updatedAt)}</div>
-              </div>
-              {(() => {
-                const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
-                const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
-                if (isHttp) {
-                  return (
-                    <div className="sm:col-span-2">
-                      <div className="text-xs text-gray-500 mb-1">Photo</div>
-                      <img src={src as string} alt="profile" className="w-full max-h-80 object-contain rounded border" />
-                    </div>
-                  );
-                }
-                return (
-                  <div className="sm:col-span-2">
-                    <div className="text-xs text-gray-500 mb-1">Photo</div>
-                    <div className="text-sm text-gray-700 bg-gray-50 border rounded p-3">
-                      No web-viewable photo available. Ask the user to re-upload (Cloudinary HTTPS URL required).
+                  })()}
+                  <div>
+                    <h2 className="text-xl font-bold">{profileModal.fullName || profileModal.name || 'Tourist'}</h2>
+                    <p className="text-green-100">{profileModal.email}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {profileModal.verified && (
+                        <span className="bg-white/20 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Verified
+                        </span>
+                      )}
+                      {profileModal.profileCompleted && (
+                        <span className="bg-white/20 text-white px-2 py-1 rounded-full text-xs">
+                          Profile Complete
+                        </span>
+                      )}
                     </div>
                   </div>
-                );
-              })()}
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => setProfileModal(null)} className="bg-white/20 hover:bg-white/30 text-white border-white/30">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Close
+                </Button>
+              </div>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Personal Information Card */}
+                <Card className="lg:col-span-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Personal Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</div>
+                        <div className="text-sm font-medium text-gray-900">{profileModal.fullName || profileModal.name || '—'}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Age</div>
+                        <div className="text-sm font-medium text-gray-900">{profileModal.age || '—'}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</div>
+                        <div className="text-sm font-medium text-gray-900">{profileModal.gender || '—'}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nationality</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {profileModal.nationality ? (
+                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
+                              {profileModal.nationality}
+                            </span>
+                          ) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Account Status Card */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Account Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Profile Status</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        profileModal.profileCompleted 
+                          ? 'bg-green-50 text-green-700' 
+                          : 'bg-yellow-50 text-yellow-700'
+                      }`}>
+                        {profileModal.profileCompleted ? 'Complete' : 'Incomplete'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Verification</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        profileModal.verified 
+                          ? 'bg-green-50 text-green-700' 
+                          : 'bg-gray-50 text-gray-700'
+                      }`}>
+                        {profileModal.verified ? 'Verified' : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t">
+                      <div className="text-xs text-gray-500 mb-1">Member Since</div>
+                      <div className="text-sm font-medium text-gray-900">{formatTimestamp(profileModal.createdAt)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Last Updated</div>
+                      <div className="text-sm font-medium text-gray-900">{formatTimestamp(profileModal.updatedAt)}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Documents & ID Card */}
+                <Card className="lg:col-span-3">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Documents & Identification
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Passport Number</div>
+                          <div className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-2 rounded border">
+                            {profileModal.passportNumber || 'Not provided'}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Government ID</div>
+                          <div className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-2 rounded border">
+                            {profileModal.governmentId || 'Not provided'}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Profile Photo Section */}
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Profile Photo</div>
+                        {(() => {
+                          const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
+                          const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
+                          if (isHttp) {
+                            return (
+                              <div className="relative">
+                                <img src={src as string} alt="profile" className="w-full max-h-48 object-cover rounded-lg border shadow-sm" />
+                                <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs">
+                                  ✓ Available
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                              <svg className="w-12 h-12 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <p className="text-sm text-gray-500">No photo available</p>
+                              <p className="text-xs text-gray-400 mt-1">Cloudinary HTTPS URL required</p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         </div>
