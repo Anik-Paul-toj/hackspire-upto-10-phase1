@@ -22,7 +22,7 @@ const Hero = () => {
   return (
     <section
       aria-label="Hero"
-      className="max-container px-4 sm:px-6 lg:px-20 3xl:px-0 flex flex-col gap-8 py-8 md:gap-12 md:py-12 lg:gap-20 lg:py-20 xl:flex-row items-start mt-16 sm:mt-20"
+      className="max-container px-6 sm:px-6 lg:px-30 3xl:px-0 flex flex-col gap-8 py-8 md:gap-12 md:py-12 lg:gap-20 lg:py-20 xl:flex-row items-start mt-10 sm:mt-0"
     >
       <div className="absolute right-0 top-10 h-screen w-screen bg-[url('/pattern-bg.png')] bg-cover bg-center md:-right-28 xl:-top-30 opacity-20 sm:opacity-100" />
 
@@ -40,9 +40,9 @@ const Hero = () => {
         </h1>
 
         <p className="text-base sm:text-lg md:text-xl text-gray-30 mb-4 sm:mb-6 max-w-3xl leading-relaxed mt-4 sm:mt-6">
-          Advanced <span className="text-green-500 font-semibold">AI monitoring</span> with
-          geo-fencing and blockchain digital ID — comprehensive tourist safety and
-          real-time incident response.
+          An intelligent safety network combining <span className="text-green-500 font-semibold">blockchain identity</span>, 
+          IoT geo-tracking, and decentralized emergency mesh — protecting tourists during 
+          crises and connectivity failures.
         </p>
 
         <div className="flex flex-col w-full gap-3 sm:flex-row sm:items-center sm:flex-wrap">
@@ -70,7 +70,7 @@ const Hero = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 max-w-3xl mt-8 sm:mt-10">
+        {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 max-w-3xl mt-8 sm:mt-10">
           <div className="text-center">
             <div className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600 mb-1">500K+</div>
             <div className="text-xs sm:text-sm text-gray-600">Tourists Protected</div>
@@ -87,7 +87,7 @@ const Hero = () => {
             <div className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600 mb-1">99.9%</div>
             <div className="text-xs sm:text-sm text-gray-600">Response Rate</div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       <div className="relative flex flex-1 items-start justify-center mt-6 sm:mt-8 xl:mt-0">
