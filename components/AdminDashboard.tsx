@@ -974,50 +974,6 @@ out center;`;
                       </div>
                     </div>
                     )}
-
-                    {selected.type === 'tourist' && selected.id && (() => {
-                      const t = tourists.find(u => u.id === selected.id);
-                      const loc = findLocation(selected.id);
-                      return (
-                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                          <div className="flex items-start gap-3">
-                            {t?.photoURL ? (
-                              <img src={t.photoURL} className="w-12 h-12 rounded-full border" alt={t.name} />
-                            ) : (
-                              <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold text-lg">
-                                {t?.name?.charAt(0)?.toUpperCase() || 'T'}
-                              </div>
-                            )}
-                            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <div>
-                                <div className="text-xs text-gray-500">Name</div>
-                                <div className="font-medium text-gray-900">{t?.name || selected.title}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">Email</div>
-                                <div className="text-sm text-gray-800">{t?.email || 'N/A'}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">Verified</div>
-                                <div className={`inline-flex items-center text-xs px-2 py-1 rounded-full ${t?.verified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{t?.verified ? 'Yes' : 'No'}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">User ID</div>
-                                <div className="text-xs font-mono text-gray-700 break-all">{t?.id}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">Last Active</div>
-                                <div className="text-sm text-gray-800">{formatTimestamp(t?.lastActive)}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">GPS Source</div>
-                                <div className="text-sm text-gray-800">{loc?.latestLocation?.source || 'Unknown'}</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8">
