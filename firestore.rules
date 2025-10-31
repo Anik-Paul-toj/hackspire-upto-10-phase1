@@ -68,6 +68,13 @@ service cloud.firestore {
       // WARNING: For production, tighten this to authenticated-only and field validation
       allow read, write: if true;
     }
+
+    // Dispatches collection for tracking admin responses to alerts
+    match /dispatches/{dispatchId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, onSnapshot, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import { getFirebase } from './firebase';
 
 export type AlertDoc = {
@@ -12,6 +12,10 @@ export type AlertDoc = {
   verifiedByAI: boolean;
   timestamp: unknown;
   aiSummary: string;
+  dispatchedBy?: string;
+  dispatchedAt?: unknown;
+  dispatchClassification?: string;
+  dispatchNotes?: string;
 };
 
 export async function createAlert(params: {
@@ -41,6 +45,42 @@ export function observeAlert(alertId: string, cb: (data: AlertDoc | null) => voi
   const ref = doc(db, 'alerts', alertId);
   return onSnapshot(ref, (snap) => {
     cb((snap.exists() ? (snap.data() as AlertDoc) : null));
+  });
+}
+
+export async function dispatchAlert(params: {
+  alertId: string;
+  adminId: string;
+  classification: string;
+  notes?: string;
+}): Promise<void> {
+  const { db } = getFirebase();
+  const alertRef = doc(db, 'alerts', params.alertId);
+  
+  await updateDoc(alertRef, {
+    status: 'verified',
+    dispatchedBy: params.adminId,
+    dispatchedAt: serverTimestamp(),
+    dispatchClassification: params.classification,
+    dispatchNotes: params.notes || '',
+  });
+  
+  // Create a dispatch record
+  await addDoc(collection(db, 'dispatches'), {
+    alertId: params.alertId,
+    adminId: params.adminId,
+    classification: params.classification,
+    notes: params.notes || '',
+    timestamp: serverTimestamp(),
+  });
+}
+
+export async function resolveAlert(alertId: string): Promise<void> {
+  const { db } = getFirebase();
+  const alertRef = doc(db, 'alerts', alertId);
+  
+  await updateDoc(alertRef, {
+    status: 'resolved',
   });
 }
 

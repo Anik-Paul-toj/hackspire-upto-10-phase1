@@ -201,5 +201,31 @@
   scrollbar-width: none;
 }
 
+/* Enhanced Map Popup Styles */
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg shadow-xl border-0;
+}
+
+.leaflet-popup-content {
+  @apply m-0;
+}
+
+.leaflet-popup-tip {
+  @apply shadow-lg;
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+  @apply bg-white border border-gray-200;
+}
+
+/* Map Controls Enhancement */
+.leaflet-control-zoom a {
+  @apply text-green-600 border-green-200;
+}
+
+.leaflet-control-zoom a:hover {
+  @apply bg-green-50;
+}
+
 
 
