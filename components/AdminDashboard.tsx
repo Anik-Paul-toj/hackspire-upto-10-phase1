@@ -1266,23 +1266,25 @@ out center;`;
 
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-50 via-gray-100 to-green-50">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-8 py-6">
         {/* Header with Statistics */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Control Center</h1>
-              <p className="text-gray-600">Real-time monitoring and emergency response</p>
+              <h1 className="text-5xl font-black text-gray-900 mb-3 font-lato tracking-tight bg-gradient-to-r from-gray-900 via-green-700 to-gray-900 bg-clip-text text-transparent">
+                Admin Control Center
+              </h1>
+              <p className="text-lg text-gray-600 font-lato font-medium tracking-wide">Real-time monitoring and emergency response</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-500 font-lato">
                 Last updated: {new Date().toLocaleTimeString()}
               </div>
               <Button 
                 onClick={() => window.location.reload()} 
                 variant="outline" 
                 size="sm"
-                className="border-green-600 text-green-600 hover:bg-green-50"
+                className="border-green-600 text-green-600 hover:bg-green-50 font-lato font-medium"
               >
                 Refresh
               </Button>
@@ -1290,54 +1292,48 @@ out center;`;
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <Card className="border-green-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Active Alerts</p>
-                    <p className="text-2xl font-bold text-red-600">{stats.activeAlerts}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-red-300 transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Active Alerts</p>
+                  <p className="text-3xl font-bold text-red-600 font-lato">{stats.activeAlerts}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="w-14 h-14 bg-red-50 border border-red-100 rounded-xl flex items-center justify-center">
+                  <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
 
-            <Card className="border-green-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Total Tourists</p>
-                    <p className="text-2xl font-bold text-green-600">{stats.totalTourists}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                    </svg>
-                  </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-green-300 transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Total Tourists</p>
+                  <p className="text-3xl font-bold text-green-600 font-lato">{stats.totalTourists}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="w-14 h-14 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center">
+                  <svg className="w-7 h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
 
-            <Card className="border-green-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Dispatched</p>
-                    <p className="text-2xl font-bold text-amber-600">{stats.verifiedAlerts}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-amber-300 transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Dispatched</p>
+                  <p className="text-3xl font-bold text-amber-600 font-lato">{stats.verifiedAlerts}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="w-14 h-14 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center">
+                  <svg className="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1348,8 +1344,10 @@ out center;`;
               <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
                 <div className="px-6 py-4 flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-white text-lg">Real-time Monitoring Map</CardTitle>
-                    <CardDescription className="text-green-100 mt-1">
+                    <CardTitle className="text-xl font-bold font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
+                      Real-time Monitoring Map
+                    </CardTitle>
+                    <CardDescription className="text-green-100 mt-1 font-lato font-medium">
                       Live tracking • {stats.totalTourists} tourists • {stats.activeAlerts} active alerts
                     </CardDescription>
                   </div>
@@ -1633,7 +1631,7 @@ out center;`;
             {/* Enhanced Selected Location Section - Spans full width when selected */}
             <Card className="border-green-200 lg:col-span-3">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-gray-800 via-green-600 to-gray-800 bg-clip-text text-transparent">
                   <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -2034,9 +2032,9 @@ out center;`;
             {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
               <Card className="border-red-400 bg-red-50 shadow-lg">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
                     <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     🚨 REAL-TIME SOS ALERT
@@ -2089,9 +2087,9 @@ out center;`;
             {deviceSOS.length > 0 && (
               <Card className="border-red-400 bg-red-50 shadow-lg">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-orange-600 to-red-800 bg-clip-text text-transparent">
                     <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     🚨 DEVICE SOS ALERTS ({deviceSOS.length})
@@ -2146,8 +2144,8 @@ out center;`;
             {alerts.filter(a => a.data.status === 'pending').length > 0 && (
               <Card className="border-red-200 bg-red-50/50">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2 text-red-700">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-700 via-red-500 to-red-700 bg-clip-text text-transparent">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     Urgent Alerts ({alerts.filter(a => a.data.status === 'pending').length})
@@ -2202,13 +2200,13 @@ out center;`;
             <Card className="border-green-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
               <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
                 <div className="px-5 py-6">
-                  <CardTitle className="text-white flex items-center justify-between">
+                  <CardTitle className="text-xl font-bold flex items-center justify-between font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
                     <span>Tourist Management</span>
-                    <span className="text-sm bg-green-800/30 px-2 py-1 rounded-full">
+                    <span className="text-sm bg-green-800/30 px-2 py-1 rounded-full text-green-100 font-medium">
                       {stats.totalTourists} total
                     </span>
                   </CardTitle>
-                  <CardDescription className="text-green-100 mt-2">
+                  <CardDescription className="text-green-100 mt-2 font-lato font-medium">
                     Real-time location tracking
                   </CardDescription>
                 </div>
@@ -2349,8 +2347,8 @@ out center;`;
         <div className="mt-8">
           <Card className="border-red-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2 text-red-700">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
                 Dispatch SOS Help
