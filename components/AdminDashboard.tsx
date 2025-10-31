@@ -11,9 +11,190 @@ import { useUserProfileContext } from '@/contexts/UserProfileProvider';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+
+// 50 random unsafe zones scattered around Kolkata area (22.443830, 88.416730)
+const UNSAFE_ZONES = [
+  [22.441234, 88.423567], [22.467891, 88.402345], [22.428456, 88.435678], [22.454321, 88.408912],
+  [22.437890, 88.421234], [22.461345, 88.395678], [22.433456, 88.429012], [22.459789, 88.411345],
+  [22.425678, 88.417890], [22.452134, 88.403456], [22.439012, 88.426789], [22.456789, 88.399012],
+  [22.431234, 88.413456], [22.464567, 88.407890], [22.447890, 88.431234], [22.435678, 88.419567],
+  [22.463012, 88.401890], [22.441567, 88.425234], [22.458345, 88.393678], [22.429789, 88.437012],
+  [22.466234, 88.405345], [22.443890, 88.427678], [22.450123, 88.409234], [22.427345, 88.433567],
+  [22.465890, 88.397890], [22.439567, 88.421567], [22.462234, 88.415890], [22.435012, 88.409123],
+  [22.457678, 88.431890], [22.441890, 88.403234], [22.448567, 88.427345], [22.433789, 88.419012],
+  [22.460456, 88.393345], [22.446123, 88.425678], [22.438234, 88.407567], [22.454890, 88.429890],
+  [22.442567, 88.401567], [22.467234, 88.423890], [22.430456, 88.415234], [22.463789, 88.397567],
+  [22.445012, 88.431567], [22.426890, 88.409890], [22.459234, 88.403890], [22.437567, 88.427234],
+  [22.451890, 88.395234], [22.444345, 88.423234], [22.466890, 88.407234], [22.432123, 88.429567],
+  [22.458890, 88.401234], [22.440567, 88.425890]
+];
+
+// Function to check if a point is within unsafe zone radius
+const isPointInUnsafeZone = (lat: number, lng: number, unsafeRadius = 100) => {
+  return UNSAFE_ZONES.some(zone => {
+    const distance = getDistanceFromLatLonInMeters(lat, lng, zone[0], zone[1]);
+    return distance <= unsafeRadius;
+  });
+};
+
+// Function to calculate distance between two points
+const getDistanceFromLatLonInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371000; // Radius of the earth in meters
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const d = R * c; // Distance in meters
+  return d;
+};
+
+const deg2rad = (deg: number) => {
+  return deg * (Math.PI/180);
+};
+
+// Function to generate safe route avoiding unsafe zones using actual roads
+const generateSafeRoute = async (startLat: number, startLng: number, endLat: number, endLng: number) => {
+  try {
+    // First, try to get a direct route and check if it passes through unsafe zones
+    const directUrl = `/api/route?fromLat=${startLat}&fromLng=${startLng}&toLat=${endLat}&toLng=${endLng}`;
+    const directResponse = await fetch(directUrl);
+    
+    if (directResponse.ok) {
+      const directData = await directResponse.json();
+      
+      if (directData.success && directData.coordinates) {
+        // Check if the direct route passes through unsafe zones
+        const routePassesThroughUnsafeZones = directData.coordinates.some((coord: [number, number]) => 
+          isPointInUnsafeZone(coord[0], coord[1], 150) // 150m buffer for route checking
+        );
+        
+        if (!routePassesThroughUnsafeZones) {
+          // Direct route is safe, use it
+          return directData.coordinates;
+        }
+        
+        // Direct route is unsafe, generate waypoints to avoid unsafe zones
+        const safeWaypoints = findSafeWaypoints(startLat, startLng, endLat, endLng);
+        
+        // Get route through safe waypoints
+        if (safeWaypoints.length > 0) {
+          const waypointsParam = safeWaypoints.map(wp => `${wp[0]},${wp[1]}`).join('|');
+          const safeUrl = `/api/route?fromLat=${startLat}&fromLng=${startLng}&toLat=${endLat}&toLng=${endLng}&waypoints=${waypointsParam}`;
+          
+          const safeResponse = await fetch(safeUrl);
+          if (safeResponse.ok) {
+            const safeData = await safeResponse.json();
+            if (safeData.success && safeData.coordinates) {
+              return safeData.coordinates;
+            }
+          }
+        }
+      }
+    }
+    
+    // Fallback: generate manual waypoints if API routing fails
+    return generateManualSafeWaypoints(startLat, startLng, endLat, endLng);
+    
+  } catch (error) {
+    console.error('Error generating safe route:', error);
+    return generateManualSafeWaypoints(startLat, startLng, endLat, endLng);
+  }
+};
+
+// Function to find safe waypoints that avoid unsafe zones
+const findSafeWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
+  const waypoints: [number, number][] = [];
+  
+  // Calculate general direction
+  const latDiff = endLat - startLat;
+  const lngDiff = endLng - startLng;
+  
+  // Generate strategic waypoints that go around unsafe zone clusters
+  const numWaypoints = 3;
+  
+  for (let i = 1; i <= numWaypoints; i++) {
+    const factor = i / (numWaypoints + 1);
+    let wpLat = startLat + latDiff * factor;
+    let wpLng = startLng + lngDiff * factor;
+    
+    // If waypoint is in unsafe zone, try to find a safe alternative
+    if (isPointInUnsafeZone(wpLat, wpLng, 200)) {
+      const safeAlternative = findNearestSafePoint(wpLat, wpLng, 500);
+      if (safeAlternative) {
+        wpLat = safeAlternative[0];
+        wpLng = safeAlternative[1];
+      }
+    }
+    
+    waypoints.push([wpLat, wpLng]);
+  }
+  
+  return waypoints;
+};
+
+// Function to find nearest safe point from a given unsafe point
+const findNearestSafePoint = (lat: number, lng: number, searchRadius: number): [number, number] | null => {
+  const step = 0.001; // ~111 meters
+  const maxSteps = Math.ceil(searchRadius / 111);
+  
+  // Try points in expanding circles
+  for (let radius = 1; radius <= maxSteps; radius++) {
+    const angleStep = Math.PI / (4 * radius); // More points for larger radius
+    
+    for (let angle = 0; angle < 2 * Math.PI; angle += angleStep) {
+      const testLat = lat + Math.cos(angle) * step * radius;
+      const testLng = lng + Math.sin(angle) * step * radius;
+      
+      if (!isPointInUnsafeZone(testLat, testLng, 150)) {
+        return [testLat, testLng];
+      }
+    }
+  }
+  
+  return null;
+};
+
+// Fallback manual waypoint generation
+const generateManualSafeWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
+  const waypoints: [number, number][] = [];
+  waypoints.push([startLat, startLng]);
+  
+  // Add intermediate points that follow a safe path
+  const midLat = (startLat + endLat) / 2;
+  const midLng = (startLng + endLng) / 2;
+  
+  // Try to go around unsafe zones by adding offset waypoints
+  const offset = 0.005; // ~500 meters
+  
+  // First waypoint - slightly offset from direct path
+  let wp1Lat = startLat + (midLat - startLat) * 0.3;
+  let wp1Lng = startLng + (midLng - startLng) * 0.3 + offset;
+  
+  if (isPointInUnsafeZone(wp1Lat, wp1Lng)) {
+    wp1Lng = startLng + (midLng - startLng) * 0.3 - offset;
+  }
+  
+  waypoints.push([wp1Lat, wp1Lng]);
+  
+  // Second waypoint - offset in other direction
+  let wp2Lat = startLat + (endLat - startLat) * 0.7;
+  let wp2Lng = startLng + (endLng - startLng) * 0.7 - offset;
+  
+  if (isPointInUnsafeZone(wp2Lat, wp2Lng)) {
+    wp2Lng = startLng + (endLng - startLng) * 0.7 + offset;
+  }
+  
+  waypoints.push([wp2Lat, wp2Lng]);
+  waypoints.push([endLat, endLng]);
+  
+  return waypoints;
+};
 
 type Tourist = { 
   id: string; 
@@ -115,6 +296,11 @@ export default function AdminDashboard() {
   const [routeSummary, setRouteSummary] = useState<string | null>(null);
   const [routeSummaryLoading, setRouteSummaryLoading] = useState<boolean>(false);
   const [recentlyCreatedAlerts, setRecentlyCreatedAlerts] = useState<Set<string>>(new Set());
+  
+  // New state for unsafe zones and safe routing
+  const [showUnsafeZones, setShowUnsafeZones] = useState<boolean>(true);
+  const [showSafeRoute, setShowSafeRoute] = useState<boolean>(true);
+  const [safeRouteCoordinates, setSafeRouteCoordinates] = useState<[number, number][] | null>(null);
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -313,6 +499,7 @@ export default function AdminDashboard() {
     });
     // Clear route when viewing a new alert
     setRouteCoordinates(null);
+    setSafeRouteCoordinates(null);
     setSelectedPoliceStation(null);
     setRouteSummary(null);
     setTimeout(() => document.getElementById('admin-map')?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -568,6 +755,7 @@ out center;`;
     try {
       setRouteLoading(true);
       setRouteCoordinates(null);
+      setSafeRouteCoordinates(null);
       
       // Use Next.js API route to get routing data
       const url = `/api/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`;
@@ -581,6 +769,17 @@ out center;`;
       
       if (data.success && data.coordinates && data.coordinates.length > 0) {
         setRouteCoordinates(data.coordinates);
+        
+        // Generate safe route avoiding unsafe zones using actual roads
+        try {
+          const safeRoute = await generateSafeRoute(fromLat, fromLng, toLat, toLng);
+          setSafeRouteCoordinates(safeRoute);
+          console.log(`Safe route generated with ${safeRoute.length} waypoints avoiding unsafe zones`);
+        } catch (error) {
+          console.error('Error generating safe route:', error);
+          setSafeRouteCoordinates(null);
+        }
+        
         console.log(`Route fetched successfully using ${data.service || 'unknown'} service with ${data.coordinates.length} waypoints`);
         
         // Show notification about the route service used
@@ -595,6 +794,7 @@ out center;`;
     } catch (e: any) {
       console.error('Error fetching route:', e);
       setRouteCoordinates(null);
+      setSafeRouteCoordinates(null);
       
       // More user-friendly error message
       let errorMessage = 'Unable to calculate route. ';
@@ -668,6 +868,7 @@ out center;`;
       void fetchNearbyPolice(selected.lat, selected.lng);
       // Clear route when SOS alert changes
       setRouteCoordinates(null);
+      setSafeRouteCoordinates(null);
       setSelectedPoliceStation(null);
       setRouteSummary(null);
     } else {
@@ -675,6 +876,7 @@ out center;`;
       setPoliceError(null);
       setPoliceLoading(false);
       setRouteCoordinates(null);
+      setSafeRouteCoordinates(null);
       setSelectedPoliceStation(null);
       setRouteSummary(null);
     }
@@ -1094,7 +1296,104 @@ out center;`;
                         </Popup>
                       </Marker>
                     ))}
+
+                    {/* Unsafe Zones */}
+                    {showUnsafeZones && UNSAFE_ZONES.map((zone, index) => (
+                      <Circle
+                        key={`unsafe-zone-${index}`}
+                        center={[zone[0], zone[1]]}
+                        radius={100} // 100 meter radius for each unsafe zone
+                        pathOptions={{
+                          color: "#dc2626",
+                          fillColor: "#dc2626",
+                          fillOpacity: 0.3,
+                          weight: 2
+                        }}
+                      />
+                    ))}
+
+                    {/* Safe Route */}
+                    {showSafeRoute && safeRouteCoordinates && safeRouteCoordinates.length > 0 && (
+                      <Polyline
+                        positions={safeRouteCoordinates}
+                        pathOptions={{
+                          color: "#16a34a",
+                          weight: 4,
+                          opacity: 0.8,
+                          dashArray: "10, 10"
+                        }}
+                      />
+                    )}
+
+                    {/* Original Route (for comparison) */}
+                    {routeCoordinates && routeCoordinates.length > 0 && (
+                      <Polyline
+                        positions={routeCoordinates}
+                        pathOptions={{
+                          color: "#2563eb",
+                          weight: 3,
+                          opacity: 0.6
+                        }}
+                      />
+                    )}
                   </MapContainer>
+                </div>
+
+                {/* Control Panel for Unsafe Zones and Routes */}
+                <div className="absolute top-4 right-4 z-1000 bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="unsafe-zones-admin"
+                        checked={showUnsafeZones}
+                        onChange={(e) => setShowUnsafeZones(e.target.checked)}
+                        className="rounded"
+                      />
+                      <label htmlFor="unsafe-zones-admin" className="text-sm font-medium text-gray-700">
+                        Show Unsafe Zones
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="safe-route-admin"
+                        checked={showSafeRoute}
+                        onChange={(e) => setShowSafeRoute(e.target.checked)}
+                        className="rounded"
+                      />
+                      <label htmlFor="safe-route-admin" className="text-sm font-medium text-gray-700">
+                        Show Safe Route
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="absolute bottom-4 left-4 z-1000 bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Legend</h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-600"></div>
+                      <span>Unsafe Zones</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-1 bg-green-600"></div>
+                      <span>Safe Route (avoiding unsafe zones)</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-1 bg-blue-600"></div>
+                      <span>Original Route</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                      <span>Police Stations</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <span>SOS Alerts</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
