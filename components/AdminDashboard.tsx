@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
+import "leaflet/dist/leaflet.css";
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAllLocations } from '@/hooks/useAllLocations';
 import { dispatchAlert, resolveAlert } from '@/lib/alerts';
@@ -38,6 +39,20 @@ export default function AdminDashboard() {
   } | null>(null);
   const [selectedTourist, setSelectedTourist] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [dispatchForm, setDispatchForm] = useState<{ alertId: string; classification: string; notes: string }>(
+    { alertId: '', classification: 'Medical Emergency', notes: '' }
+  );
+
+  const formatTimestamp = (value: any) => {
+    if (!value) return 'Unknown time';
+    try {
+      // Firestore Timestamp or Date
+      const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value.seconds ? value.seconds * 1000 : value);
+      return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+    } catch {
+      return String(value);
+    }
+  };
 
   useEffect(() => {
     const { db } = getFirebase();
@@ -124,6 +139,12 @@ export default function AdminDashboard() {
       console.error('Failed to dispatch alert:', error);
     }
   };
+
+  useEffect(() => {
+    if (selected?.type === 'sos' && selected.id) {
+      setDispatchForm((prev) => ({ ...prev, alertId: selected.id! }));
+    }
+  }, [selected]);
 
   const handleResolveAlert = async (alertId: string) => {
     try {
@@ -232,6 +253,8 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+          
 
             <Card className="border-green-200">
               <CardContent className="p-4">
@@ -495,42 +518,92 @@ export default function AdminDashboard() {
                       </div>
                       
                       <div className="bg-white p-3 rounded border mt-3">
-                        <div className="text-xs text-gray-500 mb-1">Coordinates</div>
-                        <div className="font-mono text-sm text-gray-800 mb-2">
-                          {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm"
-                            onClick={() => copyToClipboard(`${selected.lat},${selected.lng}`)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Copy Coords
-                          </Button>
-                          <Button 
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`, '_blank')}
-                          >
-                            Open in Maps
-                          </Button>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Coordinates</div>
+                            <div className="font-mono text-sm text-gray-800">
+                              {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Timestamp</div>
+                            <div className="text-sm text-gray-800">
+                              {selected.type === 'tourist' ? (
+                                (() => {
+                                  const loc = selected.id ? findLocation(selected.id) : undefined;
+                                  return formatTimestamp(loc?.latestLocation?.timestamp);
+                                })()
+                              ) : (
+                                (() => {
+                                  const alert = alerts.find(a => a.id === selected.id);
+                                  return formatTimestamp(alert?.data?.timestamp);
+                                })()
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <Button 
+                              size="sm"
+                              onClick={() => copyToClipboard(`${selected.lat},${selected.lng}`)}
+                              className={selected.type === 'sos' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}
+                            >
+                              Copy Coords
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`, '_blank')}
+                            >
+                              Open in Maps
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
                     
-                    {selected.type === 'tourist' && selected.id && (
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <div className="text-sm font-medium text-blue-900 mb-2">Quick Actions</div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="text-blue-600 border-blue-300">
-                            Send Message
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-blue-600 border-blue-300">
-                            View History
-                          </Button>
+                    {selected.type === 'tourist' && selected.id && (() => {
+                      const t = tourists.find(u => u.id === selected.id);
+                      const loc = findLocation(selected.id);
+                      return (
+                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-start gap-3">
+                            {t?.photoURL ? (
+                              <img src={t.photoURL} className="w-12 h-12 rounded-full border" alt={t.name} />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold text-lg">
+                                {t?.name?.charAt(0)?.toUpperCase() || 'T'}
+                              </div>
+                            )}
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <div className="text-xs text-gray-500">Name</div>
+                                <div className="font-medium text-gray-900">{t?.name || selected.title}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Email</div>
+                                <div className="text-sm text-gray-800">{t?.email || 'N/A'}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Verified</div>
+                                <div className={`inline-flex items-center text-xs px-2 py-1 rounded-full ${t?.verified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{t?.verified ? 'Yes' : 'No'}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">User ID</div>
+                                <div className="text-xs font-mono text-gray-700 break-all">{t?.id}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Last Active</div>
+                                <div className="text-sm text-gray-800">{formatTimestamp(t?.lastActive)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">GPS Source</div>
+                                <div className="text-sm text-gray-800">{loc?.latestLocation?.source || 'Unknown'}</div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -720,6 +793,91 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </aside>
+        </div>
+        {/* SOS Dispatch Section (Bottom) */}
+        <div className="mt-8">
+          <Card className="border-red-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                Dispatch SOS Help
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Select Alert</label>
+                  <select
+                    value={dispatchForm.alertId}
+                    onChange={(e) => setDispatchForm({ ...dispatchForm, alertId: e.target.value })}
+                    className="w-full border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose pending alert…</option>
+                    {alerts.filter(a => a.data.status === 'pending').map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {(a.data.userName || 'Unknown') + (a.data.location ? ` (${a.data.location.lat.toFixed(3)}, ${a.data.location.lng.toFixed(3)})` : '')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Emergency Type</label>
+                  <select
+                    value={dispatchForm.classification}
+                    onChange={(e) => setDispatchForm({ ...dispatchForm, classification: e.target.value })}
+                    className="w-full border rounded px-3 py-2 text-sm"
+                  >
+                    <option>Medical Emergency</option>
+                    <option>Security Threat</option>
+                    <option>Accident</option>
+                    <option>Natural Disaster</option>
+                    <option>Lost/Stranded</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    disabled={!dispatchForm.alertId}
+                    onClick={async () => {
+                      if (!dispatchForm.alertId) return;
+                      try {
+                        await dispatchAlert({
+                          alertId: dispatchForm.alertId,
+                          adminId: user?.uid ?? 'unknown',
+                          classification: dispatchForm.classification,
+                          notes: dispatchForm.notes || 'Dispatched from admin dashboard',
+                        });
+                        setDispatchForm((prev) => ({ ...prev, notes: '' }));
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="w-full bg-red-600 hover:bg-red-700"
+                  >
+                    Dispatch Help
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Notes (optional)</label>
+                <textarea
+                  value={dispatchForm.notes}
+                  onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
+                  className="w-full border rounded px-3 py-2 text-sm min-h-[80px]"
+                  placeholder="Add context for responders…"
+                />
+              </div>
+
+              {dispatchForm.alertId && (
+                <div className="text-xs text-gray-500">
+                  Tip: Use the map or the alerts panel to review details before dispatching.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
