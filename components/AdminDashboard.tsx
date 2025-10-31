@@ -61,7 +61,9 @@ const deg2rad = (deg: number) => {
 // Function to generate safe route avoiding unsafe zones using actual roads
 const generateSafeRoute = async (startLat: number, startLng: number, endLat: number, endLng: number) => {
   try {
-    // First, try to get a direct route and check if it passes through unsafe zones
+    console.log('Generating safe route from', startLat, startLng, 'to', endLat, endLng);
+    
+    // First, get the direct route to analyze
     const directUrl = `/api/route?fromLat=${startLat}&fromLng=${startLng}&toLat=${endLat}&toLng=${endLng}`;
     const directResponse = await fetch(directUrl);
     
@@ -69,131 +71,415 @@ const generateSafeRoute = async (startLat: number, startLng: number, endLat: num
       const directData = await directResponse.json();
       
       if (directData.success && directData.coordinates) {
-        // Check if the direct route passes through unsafe zones
-        const routePassesThroughUnsafeZones = directData.coordinates.some((coord: [number, number]) => 
-          isPointInUnsafeZone(coord[0], coord[1], 150) // 150m buffer for route checking
+        console.log('Direct route received with', directData.coordinates.length, 'points');
+        
+        // Check if direct route is safe
+        const unsafePoints = directData.coordinates.filter((coord: [number, number]) => 
+          isPointInUnsafeZone(coord[0], coord[1], 150)
         );
         
-        if (!routePassesThroughUnsafeZones) {
-          // Direct route is safe, use it
+        if (unsafePoints.length === 0) {
+          console.log('Direct route is safe, using it');
           return directData.coordinates;
         }
         
-        // Direct route is unsafe, generate waypoints to avoid unsafe zones
-        const safeWaypoints = findSafeWaypoints(startLat, startLng, endLat, endLng);
+        console.log('Direct route has', unsafePoints.length, 'unsafe points, generating safe alternative');
         
-        // Get route through safe waypoints
-        if (safeWaypoints.length > 0) {
-          const waypointsParam = safeWaypoints.map(wp => `${wp[0]},${wp[1]}`).join('|');
+        // Find strategic waypoints that create a road-based detour
+        const strategicWaypoints = await findStrategicRoadWaypoints(startLat, startLng, endLat, endLng, unsafePoints);
+        
+        if (strategicWaypoints.length > 0) {
+          console.log('Found', strategicWaypoints.length, 'strategic waypoints');
+          
+          // Get route through strategic waypoints
+          const waypointsParam = strategicWaypoints.map(wp => `${wp[0]},${wp[1]}`).join('|');
           const safeUrl = `/api/route?fromLat=${startLat}&fromLng=${startLng}&toLat=${endLat}&toLng=${endLng}&waypoints=${waypointsParam}`;
           
           const safeResponse = await fetch(safeUrl);
           if (safeResponse.ok) {
             const safeData = await safeResponse.json();
             if (safeData.success && safeData.coordinates) {
-              return safeData.coordinates;
+              // Verify the new route is actually safe
+              const newUnsafePoints = safeData.coordinates.filter((coord: [number, number]) => 
+                isPointInUnsafeZone(coord[0], coord[1], 100)
+              );
+              
+              if (newUnsafePoints.length === 0) {
+                console.log('Generated safe route successfully with', safeData.coordinates.length, 'points');
+                return safeData.coordinates;
+              } else {
+                console.log('Generated route still has', newUnsafePoints.length, 'unsafe points, trying alternative');
+              }
             }
           }
         }
+        
+        // Try major road routing as fallback
+        return await generateMajorRoadRoute(startLat, startLng, endLat, endLng);
       }
     }
     
-    // Fallback: generate manual waypoints if API routing fails
-    return generateManualSafeWaypoints(startLat, startLng, endLat, endLng);
+    return await generateMajorRoadRoute(startLat, startLng, endLat, endLng);
     
   } catch (error) {
     console.error('Error generating safe route:', error);
-    return generateManualSafeWaypoints(startLat, startLng, endLat, endLng);
+    return await generateMajorRoadRoute(startLat, startLng, endLat, endLng);
   }
 };
 
-// Function to find safe waypoints that avoid unsafe zones
-const findSafeWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
+// Find strategic waypoints based on major roads and safe areas
+const findStrategicRoadWaypoints = async (startLat: number, startLng: number, endLat: number, endLng: number, unsafePoints: [number, number][]): Promise<[number, number][]> => {
   const waypoints: [number, number][] = [];
   
-  // Calculate general direction
+  // Calculate the general direction and distance
   const latDiff = endLat - startLat;
   const lngDiff = endLng - startLng;
+  const totalDistance = getDistanceFromLatLonInMeters(startLat, startLng, endLat, endLng);
   
-  // Generate strategic waypoints that go around unsafe zone clusters
-  const numWaypoints = 3;
-  
-  for (let i = 1; i <= numWaypoints; i++) {
-    const factor = i / (numWaypoints + 1);
-    let wpLat = startLat + latDiff * factor;
-    let wpLng = startLng + lngDiff * factor;
+  // If it's a short route (< 2km), use simple offset waypoints
+  if (totalDistance < 2000) {
+    const midLat = startLat + latDiff * 0.5;
+    const midLng = startLng + lngDiff * 0.5;
     
-    // If waypoint is in unsafe zone, try to find a safe alternative
-    if (isPointInUnsafeZone(wpLat, wpLng, 200)) {
-      const safeAlternative = findNearestSafePoint(wpLat, wpLng, 500);
-      if (safeAlternative) {
-        wpLat = safeAlternative[0];
-        wpLng = safeAlternative[1];
+    // Try different offset directions to avoid unsafe zones
+    const offsets = [
+      [0.003, 0],     // North
+      [-0.003, 0],    // South  
+      [0, 0.003],     // East
+      [0, -0.003],    // West
+    ];
+    
+    for (const [latOffset, lngOffset] of offsets) {
+      const waypointLat = midLat + latOffset;
+      const waypointLng = midLng + lngOffset;
+      
+      if (!isPointInUnsafeZone(waypointLat, waypointLng, 200)) {
+        waypoints.push([waypointLat, waypointLng]);
+        break;
       }
     }
+  } else {
+    // For longer routes, use multiple strategic waypoints
     
-    waypoints.push([wpLat, wpLng]);
+    // First waypoint - go around the unsafe zone cluster
+    const quarter1Lat = startLat + latDiff * 0.25;
+    const quarter1Lng = startLng + lngDiff * 0.25;
+    
+    // Find safe area near first quarter point
+    let safeWaypoint1 = findNearestMajorRoadPoint(quarter1Lat, quarter1Lng);
+    if (safeWaypoint1) {
+      waypoints.push(safeWaypoint1);
+    }
+    
+    // Second waypoint - continue avoiding unsafe areas
+    const quarter3Lat = startLat + latDiff * 0.75;
+    const quarter3Lng = startLng + lngDiff * 0.75;
+    
+    let safeWaypoint2 = findNearestMajorRoadPoint(quarter3Lat, quarter3Lng);
+    if (safeWaypoint2) {
+      waypoints.push(safeWaypoint2);
+    }
   }
   
   return waypoints;
 };
 
-// Function to find nearest safe point from a given unsafe point
-const findNearestSafePoint = (lat: number, lng: number, searchRadius: number): [number, number] | null => {
-  const step = 0.001; // ~111 meters
-  const maxSteps = Math.ceil(searchRadius / 111);
+// Find nearest point that's likely on a major road and safe
+const findNearestMajorRoadPoint = (lat: number, lng: number): [number, number] | null => {
+  // Major road coordinates in Kolkata area (these are approximate main road intersections)
+  const majorRoadPoints = [
+    [22.4707, 88.4117], // Sealdah area
+    [22.4632, 88.4015], // Park Street area  
+    [22.4561, 88.3931], // Kalighat area
+    [22.4354, 88.4006], // Garia area
+    [22.4489, 88.4236], // Salt Lake area
+    [22.4276, 88.4213], // Jadavpur area
+    [22.4918, 88.4005], // Shyambazar area
+    [22.4802, 88.4167], // Belgachia area
+  ];
   
-  // Try points in expanding circles
-  for (let radius = 1; radius <= maxSteps; radius++) {
-    const angleStep = Math.PI / (4 * radius); // More points for larger radius
+  let nearestPoint: [number, number] | null = null;
+  let minDistance = Infinity;
+  
+  for (const roadPoint of majorRoadPoints) {
+    const distance = getDistanceFromLatLonInMeters(lat, lng, roadPoint[0], roadPoint[1]);
     
-    for (let angle = 0; angle < 2 * Math.PI; angle += angleStep) {
+    // Only consider points that are safe and reasonably close
+    if (distance < minDistance && distance < 3000 && !isPointInUnsafeZone(roadPoint[0], roadPoint[1], 300)) {
+      minDistance = distance;
+      nearestPoint = [roadPoint[0], roadPoint[1]];
+    }
+  }
+  
+  return nearestPoint;
+};
+
+// Generate route using major roads when all else fails
+const generateMajorRoadRoute = async (startLat: number, startLng: number, endLat: number, endLng: number): Promise<[number, number][]> => {
+  console.log('Generating major road route as fallback');
+  
+  // Use known safe major road points as waypoints
+  const safeRoadWaypoints: [number, number][] = [];
+  
+  // Determine which major roads to use based on direction
+  const latDiff = endLat - startLat;
+  const lngDiff = endLng - startLng;
+  
+  if (Math.abs(latDiff) > Math.abs(lngDiff)) {
+    // More vertical movement - use north-south roads
+    if (latDiff > 0) {
+      // Going north
+      safeRoadWaypoints.push([22.4632, 88.4015]); // Park Street
+      safeRoadWaypoints.push([22.4707, 88.4117]); // Sealdah
+    } else {
+      // Going south  
+      safeRoadWaypoints.push([22.4354, 88.4006]); // Garia
+      safeRoadWaypoints.push([22.4276, 88.4213]); // Jadavpur
+    }
+  } else {
+    // More horizontal movement - use east-west roads
+    if (lngDiff > 0) {
+      // Going east
+      safeRoadWaypoints.push([22.4489, 88.4236]); // Salt Lake
+    } else {
+      // Going west
+      safeRoadWaypoints.push([22.4561, 88.3931]); // Kalighat
+    }
+  }
+  
+  // Filter waypoints to only include safe ones
+  const safeFinalWaypoints = safeRoadWaypoints.filter(wp => 
+    !isPointInUnsafeZone(wp[0], wp[1], 200)
+  );
+  
+  if (safeFinalWaypoints.length > 0) {
+    const waypointsParam = safeFinalWaypoints.map(wp => `${wp[0]},${wp[1]}`).join('|');
+    const majorRoadUrl = `/api/route?fromLat=${startLat}&fromLng=${startLng}&toLat=${endLat}&toLng=${endLng}&waypoints=${waypointsParam}`;
+    
+    try {
+      const response = await fetch(majorRoadUrl);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.coordinates) {
+          console.log('Major road route generated successfully');
+          return data.coordinates;
+        }
+      }
+    } catch (error) {
+      console.error('Major road routing failed:', error);
+    }
+  }
+  
+  // Ultimate fallback - direct route (this should rarely be reached)
+  console.log('Using direct route as ultimate fallback');
+  return [[startLat, startLng], [endLat, endLng]];
+};
+
+// Generate wide detour waypoints in a specific direction
+const generateWideDetourWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number, direction: 'north' | 'south' | 'east' | 'west'): [number, number][] => {
+  const waypoints: [number, number][] = [];
+  const detourDistance = 0.01; // ~1km detour
+  
+  const midLat = (startLat + endLat) / 2;
+  const midLng = (startLng + endLng) / 2;
+  
+  let detourLat = midLat;
+  let detourLng = midLng;
+  
+  // Create detour point based on direction
+  switch (direction) {
+    case 'north':
+      detourLat = midLat + detourDistance;
+      break;
+    case 'south':
+      detourLat = midLat - detourDistance;
+      break;
+    case 'east':
+      detourLng = midLng + detourDistance;
+      break;
+    case 'west':
+      detourLng = midLng - detourDistance;
+      break;
+  }
+  
+  // Find safe detour point
+  const safeDetour = findNearestSafePoint(detourLat, detourLng, 1000);
+  if (safeDetour) {
+    // Add waypoints for the detour
+    const quarter1Lat = startLat + (safeDetour[0] - startLat) * 0.5;
+    const quarter1Lng = startLng + (safeDetour[1] - startLng) * 0.5;
+    
+    const quarter3Lat = safeDetour[0] + (endLat - safeDetour[0]) * 0.5;
+    const quarter3Lng = safeDetour[1] + (endLng - safeDetour[1]) * 0.5;
+    
+    // Only add waypoints that are safe
+    if (!isPointInUnsafeZone(quarter1Lat, quarter1Lng, 200)) {
+      waypoints.push([quarter1Lat, quarter1Lng]);
+    }
+    
+    waypoints.push(safeDetour);
+    
+    if (!isPointInUnsafeZone(quarter3Lat, quarter3Lng, 200)) {
+      waypoints.push([quarter3Lat, quarter3Lng]);
+    }
+  }
+  
+  return waypoints;
+};
+
+// Generate multi-step safe waypoints with smaller steps
+const generateMultiStepSafeWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
+  const waypoints: [number, number][] = [];
+  const steps = 8; // More steps for better avoidance
+  
+  for (let i = 1; i < steps; i++) {
+    const factor = i / steps;
+    let wpLat = startLat + (endLat - startLat) * factor;
+    let wpLng = startLng + (endLng - startLng) * factor;
+    
+    // If waypoint is in unsafe zone, find safe alternative
+    if (isPointInUnsafeZone(wpLat, wpLng, 250)) { // Larger safety buffer
+      const safeAlternative = findNearestSafePoint(wpLat, wpLng, 800);
+      if (safeAlternative) {
+        wpLat = safeAlternative[0];
+        wpLng = safeAlternative[1];
+        waypoints.push([wpLat, wpLng]);
+      }
+    } else {
+      waypoints.push([wpLat, wpLng]);
+    }
+  }
+  
+  return waypoints;
+};
+
+// Conservative manual route generation as final fallback
+const generateConservativeManualRoute = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
+  const waypoints: [number, number][] = [];
+  waypoints.push([startLat, startLng]);
+  
+  // Create a very wide arc to avoid all unsafe zones
+  const centerLat = (startLat + endLat) / 2;
+  const centerLng = (startLng + endLng) / 2;
+  
+  // Calculate the distance between start and end
+  const distance = getDistanceFromLatLonInMeters(startLat, startLng, endLat, endLng);
+  
+  // Create a wide detour (go way around unsafe zones)
+  const detourSize = Math.max(0.015, distance / 100000); // At least 1.5km detour
+  
+  // Try different arc directions until we find a safe path
+  const arcDirections = [
+    { latOffset: detourSize, lngOffset: 0 },      // North arc
+    { latOffset: -detourSize, lngOffset: 0 },     // South arc
+    { latOffset: 0, lngOffset: detourSize },      // East arc
+    { latOffset: 0, lngOffset: -detourSize },     // West arc
+    { latOffset: detourSize * 0.7, lngOffset: detourSize * 0.7 },   // NE arc
+    { latOffset: -detourSize * 0.7, lngOffset: detourSize * 0.7 },  // SE arc
+    { latOffset: detourSize * 0.7, lngOffset: -detourSize * 0.7 },  // NW arc
+    { latOffset: -detourSize * 0.7, lngOffset: -detourSize * 0.7 }  // SW arc
+  ];
+  
+  for (const direction of arcDirections) {
+    const arcWaypoints: [number, number][] = [];
+    let allWaypointsSafe = true;
+    
+    // Create arc waypoints
+    const numArcPoints = 5;
+    for (let i = 1; i <= numArcPoints; i++) {
+      const factor = i / (numArcPoints + 1);
+      
+      // Calculate base position along direct line
+      const baseLat = startLat + (endLat - startLat) * factor;
+      const baseLng = startLng + (endLng - startLng) * factor;
+      
+      // Add arc offset (higher in the middle, lower at edges)
+      const arcFactor = Math.sin(factor * Math.PI); // Creates an arc shape
+      const arcLat = baseLat + direction.latOffset * arcFactor;
+      const arcLng = baseLng + direction.lngOffset * arcFactor;
+      
+      // Check if this waypoint is safe
+      if (isPointInUnsafeZone(arcLat, arcLng, 250)) {
+        allWaypointsSafe = false;
+        break;
+      }
+      
+      arcWaypoints.push([arcLat, arcLng]);
+    }
+    
+    // If all waypoints in this arc are safe, use it
+    if (allWaypointsSafe && arcWaypoints.length > 0) {
+      waypoints.push(...arcWaypoints);
+      break;
+    }
+  }
+  
+  // If no safe arc found, create a very conservative straight route with large offsets
+  if (waypoints.length === 1) {
+    const largeOffset = 0.02; // ~2km offset
+    const safeLat = startLat + (endLat - startLat) * 0.3;
+    const safeLng = startLng + (endLng - startLng) * 0.3;
+    
+    // Try different large offset directions
+    const offsets = [
+      [safeLat + largeOffset, safeLng],
+      [safeLat - largeOffset, safeLng],
+      [safeLat, safeLng + largeOffset],
+      [safeLat, safeLng - largeOffset]
+    ];
+    
+    for (const [offsetLat, offsetLng] of offsets) {
+      if (!isPointInUnsafeZone(offsetLat, offsetLng, 300)) {
+        waypoints.push([offsetLat, offsetLng]);
+        break;
+      }
+    }
+  }
+  
+  waypoints.push([endLat, endLng]);
+  return waypoints;
+};
+
+// Function to find nearest safe point from a given unsafe point - enhanced version
+const findNearestSafePoint = (lat: number, lng: number, searchRadius: number): [number, number] | null => {
+  const step = 0.0005; // ~55 meters per step for finer granularity
+  const maxSteps = Math.ceil(searchRadius / 55);
+  
+  // Try points in expanding circles with more thorough search
+  for (let radius = 1; radius <= maxSteps; radius++) {
+    const pointsInRing = Math.max(8, radius * 6); // More points for larger radius
+    const angleStep = (2 * Math.PI) / pointsInRing;
+    
+    for (let i = 0; i < pointsInRing; i++) {
+      const angle = i * angleStep;
       const testLat = lat + Math.cos(angle) * step * radius;
       const testLng = lng + Math.sin(angle) * step * radius;
       
-      if (!isPointInUnsafeZone(testLat, testLng, 150)) {
+      // Check with larger safety buffer to ensure we're well clear of unsafe zones
+      if (!isPointInUnsafeZone(testLat, testLng, 300)) {
+        // Double-check by testing points around this candidate
+        const candidateIsSafe = true;
+        const verificationRadius = 3; // Check 3 steps around the candidate
+        
+        for (let vr = 1; vr <= verificationRadius; vr++) {
+          for (let va = 0; va < 8; va++) {
+            const verifyAngle = (va * Math.PI) / 4;
+            const verifyLat = testLat + Math.cos(verifyAngle) * step * vr;
+            const verifyLng = testLng + Math.sin(verifyAngle) * step * vr;
+            
+            if (isPointInUnsafeZone(verifyLat, verifyLng, 200)) {
+              // If any nearby point is unsafe, this candidate is too close to danger
+              return null; // Continue searching
+            }
+          }
+        }
+        
         return [testLat, testLng];
       }
     }
   }
   
   return null;
-};
-
-// Fallback manual waypoint generation
-const generateManualSafeWaypoints = (startLat: number, startLng: number, endLat: number, endLng: number): [number, number][] => {
-  const waypoints: [number, number][] = [];
-  waypoints.push([startLat, startLng]);
-  
-  // Add intermediate points that follow a safe path
-  const midLat = (startLat + endLat) / 2;
-  const midLng = (startLng + endLng) / 2;
-  
-  // Try to go around unsafe zones by adding offset waypoints
-  const offset = 0.005; // ~500 meters
-  
-  // First waypoint - slightly offset from direct path
-  let wp1Lat = startLat + (midLat - startLat) * 0.3;
-  let wp1Lng = startLng + (midLng - startLng) * 0.3 + offset;
-  
-  if (isPointInUnsafeZone(wp1Lat, wp1Lng)) {
-    wp1Lng = startLng + (midLng - startLng) * 0.3 - offset;
-  }
-  
-  waypoints.push([wp1Lat, wp1Lng]);
-  
-  // Second waypoint - offset in other direction
-  let wp2Lat = startLat + (endLat - startLat) * 0.7;
-  let wp2Lng = startLng + (endLng - startLng) * 0.7 - offset;
-  
-  if (isPointInUnsafeZone(wp2Lat, wp2Lng)) {
-    wp2Lng = startLng + (endLng - startLng) * 0.7 + offset;
-  }
-  
-  waypoints.push([wp2Lat, wp2Lng]);
-  waypoints.push([endLat, endLng]);
-  
-  return waypoints;
 };
 
 type Tourist = { 
