@@ -30,6 +30,22 @@ export default function SeedPage() {
         { merge: true }
       );
 
+      // 1.1) Create admin collection entry
+      await setDoc(
+        doc(db, "admin", user.uid),
+        {
+          userId: user.uid,
+          name: user.displayName ?? "",
+          email: user.email ?? "",
+          photoURL: user.photoURL ?? "",
+          verified: true,
+          promotedAt: serverTimestamp(),
+          lastActive: serverTimestamp(),
+          isActive: true
+        },
+        { merge: true }
+      );
+
       // 2) locations/{uid}
       await setDoc(
         doc(db, "locations", user.uid),

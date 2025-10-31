@@ -75,6 +75,13 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    // Admin collection for tracking admin users
+    match /admin/{adminId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && adminId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
   }
 }
 

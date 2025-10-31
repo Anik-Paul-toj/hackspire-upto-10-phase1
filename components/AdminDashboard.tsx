@@ -6,6 +6,7 @@ import { useAllLocations } from '@/hooks/useAllLocations';
 import { useRealtimeSOS } from '@/hooks/useRealtimeSOS';
 import { useDevicesSOS, upsertDeviceSOSIntoFirestore } from '@/hooks/useDevicesSOS';
 import { dispatchAlert, resolveAlert } from '@/lib/alerts';
+import { updateAdminActivity } from '@/lib/user';
 import { useUserProfileContext } from '@/contexts/UserProfileProvider';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
@@ -105,6 +106,13 @@ export default function AdminDashboard() {
     });
     return () => unsub();
   }, []);
+
+  // Update admin activity when dashboard is loaded/used
+  useEffect(() => {
+    if (user?.uid) {
+      updateAdminActivity(user.uid).catch(console.error);
+    }
+  }, [user?.uid]);
 
   const findLocation = (id: string) => locations.find(l => l.id === id)?.data as LocationData | undefined;
 

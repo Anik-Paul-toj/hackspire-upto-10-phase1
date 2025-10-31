@@ -40,6 +40,23 @@ export async function signInWithGoogle(): Promise<{ user: User; role: string }> 
       await setDoc(ref, { lastActive: serverTimestamp() }, { merge: true });
       const userData = snap.data();
       role = userData?.role || 'tourist';
+      
+      // If user is already an admin, ensure they have a document in the admin collection
+      if (role === 'admin') {
+        await setDoc(
+          doc(db, 'admin', user.uid),
+          {
+            userId: user.uid,
+            name: userData?.name || user.displayName || '',
+            email: userData?.email || user.email || '',
+            photoURL: userData?.photoURL || user.photoURL || '',
+            verified: userData?.verified || false,
+            lastActive: serverTimestamp(),
+            isActive: true
+          },
+          { merge: true }
+        );
+      }
     }
 
     return { user, role };
