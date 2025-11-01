@@ -14,6 +14,11 @@ import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from 'react-leaflet';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ExpandableSection } from '@/components/dashboard/ExpandableSection';
+import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
+
+// Dashboard section types
+type DashboardSection = 'overview' | 'map' | 'sos' | 'tourists' | 'dispatch' | 'analytics';
 
 // 50 random unsafe zones scattered around Kolkata area (22.443830, 88.416730)
 const UNSAFE_ZONES = [
@@ -587,6 +592,26 @@ export default function AdminDashboard() {
   const [showUnsafeZones, setShowUnsafeZones] = useState<boolean>(true);
   const [showSafeRoute, setShowSafeRoute] = useState<boolean>(true);
   const [safeRouteCoordinates, setSafeRouteCoordinates] = useState<[number, number][] | null>(null);
+  
+  // Dashboard UI state
+  const [activeSection, setActiveSection] = useState<DashboardSection>('overview');
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState<boolean>(false);
+  const [rightPanelExpanded, setRightPanelExpanded] = useState<{
+    alerts: boolean;
+    actions: boolean;
+    filters: boolean;
+  }>({ alerts: true, actions: false, filters: false });
+  
+  // Section expansion state
+  const [sectionsExpanded, setSectionsExpanded] = useState({
+    rtdbSOS: true,
+    deviceSOS: true,
+    activeAlerts: true,
+    tourists: true,
+    dispatch: false,
+    policeStations: true,
+    routeSummary: true
+  });
 
   const formatTimestamp = (value: any) => {
     if (!value) return 'Unknown time';
@@ -732,8 +757,9 @@ export default function AdminDashboard() {
     const activeAlerts = alerts.filter(a => a.data.status === 'pending').length;
     const totalTourists = tourists.length;
     const verifiedAlerts = alerts.filter(a => a.data.status === 'verified').length;
+    const resolvedAlerts = alerts.filter(a => a.data.status === 'resolved').length;
     
-    return { activeAlerts, totalTourists, verifiedAlerts };
+    return { activeAlerts, totalTourists, verifiedAlerts, resolvedAlerts };
   }, [alerts, tourists]);
 
   const openTouristModal = (id: string) => {
@@ -1263,32 +1289,11 @@ const touristIcon = L.divIcon({
   });
 
   const newLocal = 
-<div>
-  <Card className="border border-red-300 rounded-lg sm:rounded-xl bg-gradient-to-b from-white to-red-50">
-    <CardHeader className="pb-3 sm:pb-4 border-b border-red-200 px-4 sm:px-6 pt-4 sm:pt-6">
-      <CardTitle className="text-base sm:text-lg lg:text-xl xl:text-2xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
-        <svg
-          className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z"
-          />
-        </svg>
-        <span className="truncate">Dispatch SOS Help</span>
-      </CardTitle>
-    </CardHeader>
-
-    <CardContent className="space-y-4 sm:space-y-5 pt-4 px-4 sm:px-6 pb-4 sm:pb-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+<div className="space-y-4">
+      <div className="space-y-3">
         {/* Select Alert */}
         <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Select Alert
           </label>
           <select
@@ -1296,7 +1301,7 @@ const touristIcon = L.divIcon({
             onChange={(e) =>
               setDispatchForm({ ...dispatchForm, alertId: e.target.value })
             }
-            className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none bg-white transition-colors"
           >
             <option value="">Choose pending alert…</option>
             {alerts
@@ -1314,7 +1319,7 @@ const touristIcon = L.divIcon({
 
         {/* Emergency Type */}
         <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Emergency Type
           </label>
           <select
@@ -1325,7 +1330,7 @@ const touristIcon = L.divIcon({
                 classification: e.target.value,
               })
             }
-            className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none bg-white transition-colors"
           >
             <option>Medical Emergency</option>
             <option>Security Threat</option>
@@ -1337,7 +1342,7 @@ const touristIcon = L.divIcon({
         </div>
 
         {/* Dispatch Button */}
-        <div className="flex items-end sm:col-span-2 lg:col-span-1">
+        <div className="flex items-end">
           <Button
             disabled={!dispatchForm.alertId}
             onClick={async () => {
@@ -1356,7 +1361,7 @@ const touristIcon = L.divIcon({
                 console.error(e);
               }
             }}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg transition-all duration-200 text-xs sm:text-sm"
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg transition-all duration-200 text-sm shadow-md hover:shadow-lg"
           >
             🚨 Dispatch Help
           </Button>
@@ -1365,7 +1370,7 @@ const touristIcon = L.divIcon({
 
       {/* Notes Section */}
       <div>
-        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-xs sm:text-sm font-semibold text-red-700 mb-1">
           Notes (optional)
         </label>
         <textarea
@@ -1373,112 +1378,180 @@ const touristIcon = L.divIcon({
           onChange={(e) =>
             setDispatchForm({ ...dispatchForm, notes: e.target.value })
           }
-          className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm min-h-20 resize-none focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+          className="w-full border-2 border-pink-300 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm min-h-20 resize-none focus:ring-2 focus:ring-rose-500 focus:outline-none bg-white hover:border-red-400 transition-colors"
           placeholder="Add context for responders…"
         />
       </div>
 
       {dispatchForm.alertId && (
-        <p className="text-xs text-gray-500 italic text-center sm:text-left px-2 sm:px-0">
+        <p className="text-xs text-red-600 italic text-center sm:text-left px-2 sm:px-0 bg-pink-50 py-2 rounded-lg border border-pink-200">
           💡 Tip: Review alert details on the map before dispatching.
         </p>
       )}
-    </CardContent>
-  </Card>
-</div>
+</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-green-50">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 sm:py-6 lg:py-8">
-        {/* Header with Statistics */}
-        <div className="mb-4 sm:mb-6 lg:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-black text-gray-900 mb-2 font-lato tracking-tight bg-gradient-to-r from-gray-900 via-green-700 to-gray-900 bg-clip-text text-transparent">
-                Admin Control Center
-              </h1>
-              <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-lato font-medium tracking-wide">Real-time monitoring and emergency response</p>
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-green-50/20 to-blue-50/20">
+      {/* Top Navigation Bar */}
+      <div className="bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50 shadow-md">
+        <div className="max-w-[2000px] mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="lg:hidden"
+                onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </Button>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-linear-to-br from-green-600 to-green-700 rounded-lg flex items-center justify-center shadow-lg">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div className="hidden sm:block">
+                  <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Control Center</h1>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Real-time Monitoring Dashboard</p>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-              <div className="text-xs sm:text-sm text-gray-500 font-lato hidden sm:block">
-                Last updated: {new Date().toLocaleTimeString()}
+            
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="hidden md:flex items-center gap-2 text-xs sm:text-sm text-gray-600 bg-gray-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-gray-200">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                <span className="font-mono">{new Date().toLocaleTimeString()}</span>
               </div>
               <Button 
                 onClick={() => window.location.reload()} 
                 variant="outline" 
                 size="sm"
-                className="border-green-600 text-green-600 hover:bg-green-50 font-lato font-medium text-xs sm:text-sm"
+                className="border-gray-300 hover:bg-gray-100 h-8 sm:h-9 px-2 sm:px-3"
+                title="Refresh Dashboard"
               >
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Refresh
+                <span className="hidden sm:inline ml-1.5">Refresh</span>
               </Button>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
-            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-red-300 hover:shadow-md transition-all duration-200">
+      {/* Main Layout with Sidebar */}
+      <div className="flex">
+        {/* Left Sidebar */}
+        <DashboardSidebar
+          isCollapsed={leftSidebarCollapsed}
+          onToggle={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+          activeSection={activeSection}
+          onSectionChange={(section) => setActiveSection(section as DashboardSection)}
+          stats={stats}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 min-w-0 overflow-y-auto h-screen">
+          <div className="w-full px-4 lg:px-6 py-4 lg:py-6">
+            {/* Key Metrics Row - Show in Overview */}
+            {activeSection === 'overview' && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Active Alerts Card */}
+          <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-shadow">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Active Alerts</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-red-600 font-lato">{stats.activeAlerts}</p>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Active Alerts</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.activeAlerts}</p>
+                  <p className="text-xs text-red-600 mt-1">Requires attention</p>
                 </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-red-50 border border-red-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-green-300 hover:shadow-md transition-all duration-200">
+          {/* Total Tourists Card */}
+          <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Total Tourists</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-green-600 font-lato">{stats.totalTourists}</p>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Total Tourists</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.totalTourists}</p>
+                  <p className="text-xs text-green-600 mt-1">Active tracking</p>
                 </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-green-50 border border-green-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                 </div>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-amber-300 hover:shadow-md transition-all duration-200 sm:col-span-2 lg:col-span-1">
+          {/* Dispatched Card */}
+          <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Dispatched</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-amber-600 font-lato">{stats.verifiedAlerts}</p>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Dispatched</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.verifiedAlerts}</p>
+                  <p className="text-xs text-blue-600 mt-1">Help on the way</p>
                 </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-amber-50 border border-amber-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </CardContent>
+          </Card>
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-4">
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
-            {/* Enhanced Map Section */}
-            <Card id="admin-map" className="border-green-200 overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
-                <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+          {/* Resolved Card */}
+          <Card className="border-l-4 border-l-yellow-500 hover:shadow-lg transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Resolved Today</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.resolvedAlerts}</p>
+                  <p className="text-xs text-yellow-600 mt-1">Successfully handled</p>
+                </div>
+                <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+            )}
+
+        {/* Main Content - Full Width Responsive */}
+        <div className="w-full space-y-6">
+          {/* Enhanced Map Section - Show in Overview and Map */}
+          {(activeSection === 'overview' || activeSection === 'map') && (
+            <Card id="admin-map" className="overflow-hidden shadow-lg border-2">
+              <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base sm:text-lg lg:text-xl font-bold font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
-                      Real-time Monitoring Map
+                    <CardTitle className="text-base sm:text-lg font-bold truncate">
+                      🗺️ Real-time Monitoring Map
                     </CardTitle>
-                    <CardDescription className="text-green-100 mt-1 font-lato font-medium text-xs sm:text-sm">
-                      Live tracking • {stats.totalTourists} tourists • {stats.activeAlerts} active alerts
+                    <CardDescription className="text-green-100 mt-1 text-xs sm:text-sm">
+                      Live tracking • {stats.totalTourists} users • {stats.activeAlerts} alerts
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                    <div className="text-xs sm:text-sm bg-green-800/30 px-2 sm:px-3 py-1 rounded-full">
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <div className="text-[10px] sm:text-xs bg-green-800/40 px-2 py-1 rounded-lg border border-green-500/30">
                       Zoom: {mapZoom}
                     </div>
                   </div>
@@ -1486,7 +1559,7 @@ const touristIcon = L.divIcon({
               </CardHeader>
 
               <CardContent className="p-0">
-                <div style={{ height: '50vh', minHeight: '400px', maxHeight: '600px' }} className="relative">
+                <div className="relative h-[calc(100vh-250px)] min-h-[500px]">
                   <MapContainer 
                     center={mapCenter} 
                     zoom={mapZoom} 
@@ -1753,11 +1826,13 @@ const touristIcon = L.divIcon({
 
               </CardContent>
             </Card>
+            )}
 
-            {/* Enhanced Selected Location Section - Spans full width when selected */}
-            <Card className="border-green-200 lg:col-span-3">
-              <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
-                <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-gray-800 via-green-600 to-gray-800 bg-clip-text text-transparent">
+            {/* Enhanced Selected Location Section - Show in Overview and Map */}
+            {(activeSection === 'overview' || activeSection === 'map') && (
+            <Card className="border-l-4 border-l-green-500 shadow-lg">
+              <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6 bg-green-50/30">
+                <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-gray-900">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1897,7 +1972,7 @@ const touristIcon = L.divIcon({
                     
                     {/* AI-Generated Route Summary - Show when route is displayed */}
                     {selected?.type === 'sos' && routeCoordinates && selectedPoliceStation && (
-                      <div className="mt-4 bg-linear-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                      <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -1933,36 +2008,36 @@ const touristIcon = L.divIcon({
                     {/* Enhanced Emergency Response Section - Only for SOS Alerts */}
                     {selected?.type === 'sos' && (
                       <div className="mt-4">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between mb-3 bg-yellow-100 p-3 rounded-lg border-2 border-yellow-300 shadow-md">
                           <div className="flex items-center gap-2">
-                            <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M10 2a6 6 0 016 6c0 6-6 10-6 10S4 14 4 8a6 6 0 016-6zm0 8a2 2 0 100-4 2 2 0 000 4z" />
                             </svg>
-                            <div className="font-medium text-red-700">
+                            <div className="font-bold text-yellow-800 tracking-wide">
                               🚨 EMERGENCY RESPONSE TEAMS
                             </div>
                             {!policeLoading && nearbyPolice && nearbyPolice.length > 0 && (
-                              <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-yellow-200 text-yellow-900 border border-yellow-400 shadow-sm">
                                 {nearbyPolice.length} units available
                               </span>
                             )}
                           </div>
                         {selected && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-yellow-700 font-medium">
                             Within 10 km • {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
                           </div>
                         )}
                       </div>
-                      <div className={`rounded-lg border shadow-sm ${
-                        selected?.type === 'sos' ? 'bg-red-50 border-red-200' : 'bg-white'
+                      <div className={`rounded-xl border-2 shadow-lg ${
+                        selected?.type === 'sos' ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-gray-200'
                       }`}>
                         {policeLoading && (
-                          <div className="p-4 flex items-center gap-3">
+                          <div className="p-4 flex items-center gap-3 bg-yellow-100 rounded-lg m-2">
                             <div className={`animate-spin rounded-full h-5 w-5 border-b-2 ${
-                              selected?.type === 'sos' ? 'border-red-600' : 'border-blue-600'
+                              selected?.type === 'sos' ? 'border-yellow-600' : 'border-blue-600'
                             }`}></div>
-                            <div className={`text-sm ${
-                              selected?.type === 'sos' ? 'text-red-700' : 'text-gray-600'
+                            <div className={`text-sm font-medium ${
+                              selected?.type === 'sos' ? 'text-yellow-800' : 'text-gray-600'
                             }`}>
                               {selected?.type === 'sos' 
                                 ? '🚨 Locating emergency response teams...' 
@@ -1972,22 +2047,22 @@ const touristIcon = L.divIcon({
                           </div>
                         )}
                         {policeError && (
-                          <div className="p-4 bg-red-50 border-l-4 border-red-500">
+                          <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg m-2 shadow-sm">
                             <div className="flex items-start gap-2">
-                              <svg className="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                               <div className="flex-1">
-                                <div className="text-sm text-red-700 font-medium">Unable to Find Police Stations</div>
-                                <div className="text-sm text-red-700">{policeError}</div>
-                                <div className="text-xs text-red-600 mt-1">
+                                <div className="text-sm text-yellow-800 font-bold">Unable to Find Police Stations</div>
+                                <div className="text-sm text-yellow-700">{policeError}</div>
+                                <div className="text-xs text-yellow-600 mt-1">
                                   Please contact local emergency services directly at your local emergency number.
                                 </div>
                               </div>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-xs border-red-300 text-red-700 hover:bg-red-100 ml-2"
+                                className="text-xs border-yellow-400 text-yellow-700 hover:bg-yellow-100 bg-white ml-2 shadow-sm"
                                 onClick={() => selected && fetchNearbyPolice(selected.lat, selected.lng)}
                               >
                                 Retry
@@ -1996,19 +2071,19 @@ const touristIcon = L.divIcon({
                           </div>
                         )}
                         {!policeLoading && !policeError && (!nearbyPolice || nearbyPolice.length === 0) && (
-                          <div className="p-6 text-center">
-                            <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="p-6 text-center bg-yellow-50 rounded-lg m-2">
+                            <svg className="w-10 h-10 text-yellow-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
                             <div className={`text-sm ${
-                              selected?.type === 'sos' ? 'text-red-700 font-medium' : 'text-gray-600'
+                              selected?.type === 'sos' ? 'text-yellow-800 font-bold' : 'text-gray-600'
                             }`}>
                               {selected?.type === 'sos' 
                                 ? '⚠️ No emergency response teams found within 10 km'
                                 : 'No police stations found within 10 km.'
                               }
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-yellow-700 mt-1 font-medium">
                               {selected?.type === 'sos' 
                                 ? 'Consider expanding search radius or contacting nearest emergency services'
                                 : 'Try selecting a different location'
@@ -2017,48 +2092,48 @@ const touristIcon = L.divIcon({
                           </div>
                         )}
                         {!policeLoading && nearbyPolice && nearbyPolice.length > 0 && (
-                          <ul className="max-h-80 overflow-y-auto divide-y">
+                          <ul className="max-h-80 overflow-y-auto divide-y divide-yellow-200">
                             {nearbyPolice.map((p, idx) => (
-                              <li key={p.id} className={`p-4 transition-colors ${
+                              <li key={p.id} className={`p-4 transition-all duration-200 ${
                                 selected?.type === 'sos' 
-                                  ? 'hover:bg-red-100 border-l-2 border-red-300' 
+                                  ? 'hover:bg-yellow-100 border-l-4 border-yellow-400 bg-yellow-50' 
                                   : 'hover:bg-gray-50'
                               }`}>
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-start gap-3">
-                                      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${
                                         selected?.type === 'sos'
-                                          ? 'bg-red-100 text-red-700'
+                                          ? 'bg-yellow-200 text-yellow-900 border-2 border-yellow-400'
                                           : 'bg-blue-100 text-blue-700'
                                       }`}>
                                         {idx + 1}
                                       </div>
                                       <div className="flex-1">
-                                        <div className={`font-medium mb-1 ${
-                                          selected?.type === 'sos' ? 'text-red-900' : 'text-gray-900'
+                                        <div className={`font-bold mb-1 ${
+                                          selected?.type === 'sos' ? 'text-yellow-900' : 'text-gray-900'
                                         }`}>
                                           {selected?.type === 'sos' && idx === 0 && '🚨 '}
                                           {p.name}
                                           {p.id.startsWith('estimated-') && (
-                                            <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
+                                            <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded border border-blue-300">
                                               Estimated Location
                                             </span>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                                        <div className="flex items-center gap-3 text-xs text-gray-700">
                                           <div className="flex items-center gap-1">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-3.5 h-3.5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                             </svg>
-                                            <span className={`font-medium ${
-                                              selected?.type === 'sos' && idx === 0 ? 'text-red-700' : ''
+                                            <span className={`font-bold ${
+                                              selected?.type === 'sos' && idx === 0 ? 'text-yellow-800' : ''
                                             }`}>
                                               {(p.distanceMeters/1000).toFixed(2)} km away
                                               {selected?.type === 'sos' && idx === 0 && ' - CLOSEST'}
                                             </span>
                                           </div>
-                                          <div className="flex items-center gap-1 font-mono text-[10px]">
+                                          <div className="flex items-center gap-1 font-mono text-[10px] bg-yellow-100 px-1.5 py-0.5 rounded">
                                             {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
                                           </div>
                                         </div>
@@ -2069,9 +2144,9 @@ const touristIcon = L.divIcon({
                                     <Button 
                                       size="sm" 
                                       variant="outline" 
-                                      className={`text-xs h-7 ${
+                                      className={`text-xs h-7 font-semibold shadow-sm ${
                                         selected?.type === 'sos' 
-                                          ? 'border-red-300 text-red-700 hover:bg-red-50' 
+                                          ? 'border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 bg-white' 
                                           : ''
                                       }`}
                                       onClick={() => {
@@ -2087,9 +2162,9 @@ const touristIcon = L.divIcon({
                                     </Button>
                                     <Button 
                                       size="sm"
-                                      className={`text-xs h-7 ${
+                                      className={`text-xs h-7 font-semibold shadow-md ${
                                         selected?.type === 'sos'
-                                          ? 'bg-red-600 hover:bg-red-700'
+                                          ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
                                           : 'bg-blue-600 hover:bg-blue-700'
                                       }`}
                                       onClick={() => handleRouteClick(p)}
@@ -2112,9 +2187,9 @@ const touristIcon = L.divIcon({
                                     <Button 
                                       size="sm"
                                       variant="outline"
-                                      className={`text-xs h-6 ${
+                                      className={`text-xs h-6 font-semibold shadow-sm ${
                                         selected?.type === 'sos'
-                                          ? 'border-red-300 text-red-700 hover:bg-red-50'
+                                          ? 'border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 bg-white'
                                           : 'border-blue-300 text-blue-700 hover:bg-blue-50'
                                       }`}
                                       onClick={() => {
@@ -2151,22 +2226,20 @@ const touristIcon = L.divIcon({
                 )}
               </CardContent>
             </Card>
-          </div>
+          )}
 
-          <aside className="space-y-4 sm:space-y-6">
-            {/* Enhanced RTDB SOS Panel */}
-            {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
-              <Card className="border-red-400 bg-red-50 shadow-lg">
-                <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
-                  <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
-                    <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
-                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                    🚨 REAL-TIME SOS ALERT
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+          {/* RTDB SOS Panel - Show in Overview and SOS */}
+          {(activeSection === 'overview' || activeSection === 'sos') && rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
+              <ExpandableSection
+                title="🚨 REAL-TIME SOS ALERT"
+                variant="alert"
+                defaultExpanded={true}
+                icon={
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-red-500 animate-pulse shadow-lg"></div>
+                }
+              >
+                <Card className="border-2 border-red-200 shadow-sm">
+                <CardContent className="p-3 sm:p-4">
                   <div className="bg-white p-3 rounded border border-red-200 mb-3">
                     <div className="text-sm font-medium text-red-800 mb-2">
                       {rtdbSOS.message || 'Emergency assistance needed'}
@@ -2207,21 +2280,21 @@ const touristIcon = L.divIcon({
                   </div>
                 </CardContent>
               </Card>
+              </ExpandableSection>
             )}
 
-            {/* Enhanced Device SOS List */}
-            {deviceSOS.length > 0 && (
-              <Card className="border-red-400 bg-red-50 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-orange-600 to-red-800 bg-clip-text text-transparent">
-                    <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
-                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                    🚨 DEVICE SOS ALERTS ({deviceSOS.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+            {/* Enhanced Device SOS List - Show in Overview and SOS */}
+            {(activeSection === 'overview' || activeSection === 'sos') && deviceSOS.length > 0 && (
+              <ExpandableSection
+                title="DEVICE SOS ALERTS"
+                badge={deviceSOS.length}
+                variant="alert"
+                defaultExpanded={true}
+                icon={
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-fuchsia-500 animate-pulse"></div>
+                }
+              >
+                <div className="space-y-2 sm:space-y-3">
                   {deviceSOS.map((s) => (
                     <div key={s.deviceId} className="bg-white border-2 border-red-200 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
@@ -2263,21 +2336,23 @@ const touristIcon = L.divIcon({
                       </div>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </ExpandableSection>
             )}
-            {/* Active Alerts Panel */}
-            {alerts.filter(a => a.data.status === 'pending').length > 0 && (
-              <Card className="border-red-200 bg-red-50/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-700 via-red-500 to-red-700 bg-clip-text text-transparent">
-                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                    Urgent Alerts ({alerts.filter(a => a.data.status === 'pending').length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="max-h-60 overflow-y-auto space-y-3">
+            {/* Active Alerts Panel - Show in Overview and SOS */}
+            {(activeSection === 'overview' || activeSection === 'sos') && alerts.filter(a => a.data.status === 'pending').length > 0 && (
+              <ExpandableSection
+                title="Urgent Alerts"
+                badge={alerts.filter(a => a.data.status === 'pending').length}
+                variant="warning"
+                defaultExpanded={true}
+                icon={
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                }
+              >
+                <div className="max-h-60 overflow-y-auto space-y-2 sm:space-y-3">
                   {alerts.filter(a => a.data.status === 'pending').slice(0, 3).map(alert => {
                     // Determine alert source
                     const isDeviceAlert = alert.data.userID.startsWith('device-');
@@ -2318,46 +2393,48 @@ const touristIcon = L.divIcon({
                       </div>
                     );
                   })}
-                </CardContent>
-              </Card>
+                </div>
+              </ExpandableSection>
             )}
 
-            {/* Enhanced Tourists Panel */}
-            <Card className="border-green-200 overflow-hidden flex flex-col lg:h-[calc(100vh-200px)] max-h-[800px]">
-              <CardHeader className="bg-gradient-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
-                <div className="px-4 sm:px-5 py-4 sm:py-6">
-                  <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
-                    <span>Tourist Management</span>
-                    <span className="text-xs sm:text-sm bg-green-800/30 px-2 py-1 rounded-full text-green-100 font-medium w-fit">
-                      {stats.totalTourists} total
-                    </span>
-                  </CardTitle>
-                  <CardDescription className="text-green-100 mt-2 font-lato font-medium text-xs sm:text-sm">
-                    Real-time location tracking
-                  </CardDescription>
+            {/* Enhanced Tourists Panel - Show in Overview and Tourists */}
+            {(activeSection === 'overview' || activeSection === 'tourists') && (
+            <ExpandableSection
+              title="Tourist Management"
+              badge={stats.totalTourists}
+              variant="success"
+              defaultExpanded={true}
+              icon={
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                </svg>
+              }
+            >
+              {/* Filter Controls */}
+              <div className="flex items-center justify-between gap-2 p-3 bg-green-50/30 rounded-lg border border-green-100 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <h3 className="font-semibold text-gray-700 text-xs sm:text-sm">
+                    Active ({tourists.length})
+                  </h3>
                 </div>
-              </CardHeader>
-              
-              <CardContent className="p-0 flex flex-col flex-1 min-h-0">
-                {/* Filter Controls */}
-                <div className="p-3 sm:p-4 border-b bg-gray-50 shrink-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">All Tourists ({tourists.length})</h3>
-                    <div className="text-xs sm:text-sm text-gray-500">
-                      Showing all registered users
-                    </div>
-                  </div>
+                <div className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                  {tourists.length} online
                 </div>
+              </div>
 
-                <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-2 sm:space-y-3">
+              {/* Scrollable Tourist List */}
+              <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                   {tourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
                     return (
                       <Card 
                         key={tourist.id} 
-                        className={`transition-all duration-200 hover:shadow-md cursor-pointer border ${
-                          isSelected ? 'ring-2 ring-green-500 border-green-200 bg-green-50' : 'hover:border-green-300'
+                        className={`transition-all duration-300 hover:shadow-xl cursor-pointer border-2 ${
+                          isSelected 
+                            ? 'ring-1 ring-blue-100 border-blue-300 bg-blue-50 shadow-lg scale-85' 
+                            : 'border-teal-100 hover:border-teal-300 bg-white hover:scale-102'
                         }`}
                         onClick={() => viewTourist(tourist.id, tourist.name)}
                       >
@@ -2367,16 +2444,16 @@ const touristIcon = L.divIcon({
                               {tourist.photoURL ? (
                                 <img 
                                   src={tourist.photoURL} 
-                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-gray-200 shadow-sm object-cover" 
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-3 border-teal-300 shadow-lg object-cover ring-2 ring-teal-100" 
                                   alt={tourist.name} 
                                 />
                               ) : (
-                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-green-500 to-green-600 text-white flex items-center justify-center font-bold text-lg sm:text-xl shadow-sm">
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg sm:text-xl shadow-lg ring-2 ring-blue-200">
                                   {tourist.name?.charAt(0)?.toUpperCase() || 'T'}
                                 </div>
                               )}
                               {tourist.verified && (
-                                <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center">
+                                <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-600 border-2 border-white rounded-full flex items-center justify-center shadow-lg">
                                   <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                   </svg>
@@ -2388,18 +2465,18 @@ const touristIcon = L.divIcon({
                               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <h3 className="font-semibold text-gray-900 truncate text-base sm:text-lg">{tourist.name || 'Unnamed User'}</h3>
+                                    <h3 className="font-bold text-teal-900 truncate text-base sm:text-lg">{tourist.name || 'Unnamed User'}</h3>
                                     {tourist.verified && (
-                                      <span className="bg-blue-50 text-blue-700 px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium">
-                                        Verified
+                                      <span className="bg-blue-100 text-blue-800 px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-blue-300 shadow-sm">
+                                        ✓ Verified
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs sm:text-sm text-gray-600 truncate mb-2 sm:mb-3">{tourist.email}</p>
+                                  <p className="text-xs sm:text-sm text-teal-700 truncate mb-2 sm:mb-3 font-medium">{tourist.email}</p>
                                   
                                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                     {tourist.nationality && (
-                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-800 rounded-full text-[10px] sm:text-xs font-bold border border-blue-200 shadow-sm">
                                         <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
                                         </svg>
@@ -2407,7 +2484,7 @@ const touristIcon = L.divIcon({
                                       </span>
                                     )}
                                     {tourist.age && (
-                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-gray-50 text-gray-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-gray-100 text-gray-800 rounded-full text-[10px] sm:text-xs font-bold border border-gray-200 shadow-sm">
                                         <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
@@ -2415,7 +2492,7 @@ const touristIcon = L.divIcon({
                                       </span>
                                     )}
                                     {tourist.gender && (
-                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-purple-50 text-purple-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-red-100 text-red-800 rounded-full text-[10px] sm:text-xs font-bold border border-red-200 shadow-sm">
                                         <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
@@ -2423,7 +2500,7 @@ const touristIcon = L.divIcon({
                                       </span>
                                     )}
                                     {tourist.profileCompleted && (
-                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-green-50 text-green-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-green-100 text-green-800 rounded-full text-[10px] sm:text-xs font-bold border border-green-200 shadow-sm">
                                         <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="currentColor" viewBox="0 0 20 20">
                                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
@@ -2437,14 +2514,14 @@ const touristIcon = L.divIcon({
                                 <Button 
                                   size="sm" 
                                   variant="outline"
-                                  className="shrink-0 sm:ml-4 hover:bg-green-50 hover:border-green-300 text-xs w-full sm:w-auto mt-2 sm:mt-0"
+                                  className="shrink-0 sm:ml-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-300 hover:border-blue-400 text-blue-800 font-bold p-2 hover:scale-110 shadow-sm hover:shadow-md transition-all rounded-lg"
                                   onClick={(e) => { e.stopPropagation(); openTouristModal(tourist.id); }}
+                                  title="View Details"
                                 >
-                                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                   </svg>
-                                  View Details
                                 </Button>
                               </div>
                             </div>
@@ -2456,26 +2533,139 @@ const touristIcon = L.divIcon({
                   
                   {tourists.length === 0 && (
                     <div className="p-12 text-center">
-                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                      <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-blue-200 shadow-lg">
+                        <svg className="w-10 h-10 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No tourists registered yet</h3>
-                      <p className="text-gray-500 text-sm">When users register as tourists, they will appear here with their profile information.</p>
+                      <h3 className="text-lg font-bold text-teal-900 mb-2">No tourists registered yet</h3>
+                      <p className="text-teal-600 text-sm font-medium">When users register as tourists, they will appear here with their profile information.</p>
                     </div>
                   )}
                 </div>
+              </ExpandableSection>
+            )}
+
+          {/* SOS Dispatch Section - Show in Overview and Dispatch */}
+          {(activeSection === 'overview' || activeSection === 'dispatch') && (
+            <div className="mt-6">
+          <ExpandableSection
+            title="Emergency Dispatch Console"
+            variant="alert"
+            defaultExpanded={false}
+            icon={
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            }
+          >
+              {newLocal}
+            </ExpandableSection>
+            </div>
+          )}
+
+          {/* Analytics Section - Show in Analytics */}
+          {activeSection === 'analytics' && (
+            <div className="mt-6">
+            <Card className="border-l-4 border-l-purple-500 shadow-lg">
+              <CardHeader className="bg-purple-50 border-b">
+                <CardTitle className="text-lg font-bold flex items-center gap-2 text-purple-900">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Analytics Dashboard
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Total Stats */}
+                  <div className="bg-linear-to-br from-blue-50 to-blue-100 p-6 rounded-xl border-2 border-blue-200">
+                    <div className="text-sm font-medium text-blue-700 mb-2">Total Alerts Handled</div>
+                    <div className="text-4xl font-bold text-blue-900">{alerts.length}</div>
+                    <div className="text-xs text-blue-600 mt-2">All time</div>
+                  </div>
+                  
+                  {/* Active Rate */}
+                  <div className="bg-linear-to-br from-red-50 to-red-100 p-6 rounded-xl border-2 border-red-200">
+                    <div className="text-sm font-medium text-red-700 mb-2">Active Alerts</div>
+                    <div className="text-4xl font-bold text-red-900">{stats.activeAlerts}</div>
+                    <div className="text-xs text-red-600 mt-2">Requires attention</div>
+                  </div>
+                  
+                  {/* Resolution Rate */}
+                  <div className="bg-linear-to-br from-green-50 to-green-100 p-6 rounded-xl border-2 border-green-200">
+                    <div className="text-sm font-medium text-green-700 mb-2">Resolved Today</div>
+                    <div className="text-4xl font-bold text-green-900">{stats.resolvedAlerts}</div>
+                    <div className="text-xs text-green-600 mt-2">
+                      {alerts.length > 0 ? Math.round((stats.resolvedAlerts / alerts.length) * 100) : 0}% resolution rate
+                    </div>
+                  </div>
+                  
+                  {/* Tourist Stats */}
+                  <div className="bg-linear-to-br from-purple-50 to-purple-100 p-6 rounded-xl border-2 border-purple-200">
+                    <div className="text-sm font-medium text-purple-700 mb-2">Active Tourists</div>
+                    <div className="text-4xl font-bold text-purple-900">{stats.totalTourists}</div>
+                    <div className="text-xs text-purple-600 mt-2">Currently tracked</div>
+                  </div>
+                  
+                  {/* Dispatch Stats */}
+                  <div className="bg-linear-to-br from-yellow-50 to-yellow-100 p-6 rounded-xl border-2 border-yellow-200">
+                    <div className="text-sm font-medium text-yellow-700 mb-2">Dispatched</div>
+                    <div className="text-4xl font-bold text-yellow-900">{stats.verifiedAlerts}</div>
+                    <div className="text-xs text-yellow-600 mt-2">Help on the way</div>
+                  </div>
+                  
+                  {/* Response Time */}
+                  <div className="bg-linear-to-br from-indigo-50 to-indigo-100 p-6 rounded-xl border-2 border-indigo-200">
+                    <div className="text-sm font-medium text-indigo-700 mb-2">Avg Response Time</div>
+                    <div className="text-4xl font-bold text-indigo-900">~2m</div>
+                    <div className="text-xs text-indigo-600 mt-2">Estimated</div>
+                  </div>
+                </div>
+                
+                <div className="mt-8 p-6 bg-gray-50 rounded-xl border-2 border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">System Performance</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-600">Alert Response Rate</span>
+                        <span className="font-bold text-green-600">
+                          {alerts.length > 0 ? Math.round(((stats.verifiedAlerts + stats.resolvedAlerts) / alerts.length) * 100) : 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-linear-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${alerts.length > 0 ? ((stats.verifiedAlerts + stats.resolvedAlerts) / alerts.length) * 100 : 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-600">Tourist Coverage</span>
+                        <span className="font-bold text-blue-600">
+                          {tourists.length > 0 ? Math.round((tourists.filter(t => findLocation(t.id)?.latestLocation).length / tourists.length) * 100) : 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-linear-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${tourists.length > 0 ? (tourists.filter(t => findLocation(t.id)?.latestLocation).length / tourists.length) * 100 : 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          </aside>
-        </div>
-        {/* SOS Dispatch Section (Bottom) */}
-        <div className="mt-6 sm:mt-8 lg:mt-10">
-          {newLocal}
-        </div>
-
+            </div>
+          )}
+          </div> {/* Close w-full space-y-6 */}
+          </div> {/* Close w-full h-full px-4 lg:px-6 py-4 lg:py-6 */}
+        </main>
       </div>
+
       {/* Enhanced Tourist Profile Modal */}
       {profileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
@@ -2483,7 +2673,7 @@ const touristIcon = L.divIcon({
           <div className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-3 sm:py-4 shrink-0">
+            <div className="bg-green-700 text-white px-4 sm:px-6 py-3 sm:py-4 shrink-0">
               <div className="flex items-center justify-between gap-3 sm:gap-4">
                 <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                   {(() => {

@@ -8,19 +8,19 @@ const steps = [
     icon: Smartphone,
     title: 'Download & Register',
     description: 'Install Guardio app, create your blockchain digital ID, and set up emergency contacts with biometric verification.',
-    color: 'from-green-500 to-emerald-600'
+    color: 'bg-green-600'
   },
   {
     icon: MapPin,
     title: 'Enable Location Services',
     description: 'Activate geo-fencing and AI monitoring. Set safe zones and travel preferences for personalized protection.',
-    color: 'from-blue-500 to-blue-600'
+    color: 'bg-blue-600'
   },
   {
     icon: Shield,
     title: 'Stay Protected',
     description: 'Travel with confidence. AI monitors your safety, geo-fencing tracks your location, and emergency response is always ready.',
-    color: 'from-purple-500 to-purple-600'
+    color: 'bg-red-600'
   }
 ];
 
@@ -31,7 +31,7 @@ export function HowItWorks() {
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-6">
             How{' '}
-            <span className="bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+            <span className="text-green-600">
               Guardio
             </span>
             {' '}Protects You
@@ -44,8 +44,8 @@ export function HowItWorks() {
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {/* Connection lines for desktop */}
-            <div className="hidden md:block absolute top-1/2 left-1/3 w-1/3 h-0.5 bg-gradient-to-r from-primary/50 to-accent/50 transform -translate-y-1/2" />
-            <div className="hidden md:block absolute top-1/2 left-2/3 w-1/3 h-0.5 bg-gradient-to-r from-primary/50 to-accent/50 transform -translate-y-1/2" />
+            <div className="hidden md:block absolute top-1/2 left-1/3 w-1/3 h-0.5 bg-gray-300 transform -translate-y-1/2" />
+            <div className="hidden md:block absolute top-1/2 left-2/3 w-1/3 h-0.5 bg-gray-300 transform -translate-y-1/2" />
 
             {steps.map((step, index) => (
               <div key={index} className="relative">
@@ -60,7 +60,7 @@ export function HowItWorks() {
 
                     {/* Icon */}
                     <div className="mb-6">
-                      <div className={`w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br ${step.color} p-4 group-hover:scale-110 transition-transform duration-300`}>
+                      <div className={`w-16 h-16 mx-auto rounded-2xl ${step.color} p-4 group-hover:scale-110 transition-transform duration-300`}>
                         <step.icon className="w-8 h-8 text-white" />
                       </div>
                     </div>

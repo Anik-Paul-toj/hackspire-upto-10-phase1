@@ -45,6 +45,17 @@
 
 :root {
   --radius: 0.625rem;
+  
+  /* Base colors - using darkest and lightest shades */
+  --blue-dark: #001a4d;
+  --blue-light: #e6f2ff;
+  --green-dark: #004d1a;
+  --green-light: #e6ffe6;
+  --red-dark: #4d0000;
+  --red-light: #ffe6e6;
+  --yellow-dark: #4d3d00;
+  --yellow-light: #fffce6;
+  
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -79,6 +90,16 @@
 }
 
 .dark {
+  /* Base colors - using darkest and lightest shades */
+  --blue-dark: #001a4d;
+  --blue-light: #e6f2ff;
+  --green-dark: #004d1a;
+  --green-light: #e6ffe6;
+  --red-dark: #4d0000;
+  --red-light: #ffe6e6;
+  --yellow-dark: #4d3d00;
+  --yellow-light: #fffce6;
+  
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -265,6 +286,29 @@
 
 .leaflet-control-zoom a:hover {
   @apply bg-green-50;
+}
+
+/* Custom Scrollbar for Tourist Section */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-green-400 rounded-full hover:bg-green-500;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  @apply bg-green-600;
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(74 222 128) rgb(243 244 246);
 }
 
 
