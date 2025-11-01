@@ -1198,11 +1198,9 @@ out center;`;
   const copyToClipboard = (text: string) => {
     navigator.clipboard?.writeText(text);
   };
-
-  // Enhanced icons with better styling
-  const touristIcon = L.divIcon({ 
+const touristIcon = L.divIcon({ 
     html: `<div class="relative">
-      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='32' height='40' class="drop-shadow-lg">
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='32' height='40'>
         <path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='#16a34a'/>
         <circle cx='12' cy='9' r='3' fill='white'/>
         <path d='M12 6.5c1.38 0 2.5 1.12 2.5 2.5s-1.12 2.5-2.5 2.5S9.5 10.38 9.5 9s1.12-2.5 2.5-2.5z' fill='#16a34a'/>
@@ -1215,7 +1213,7 @@ out center;`;
 
   const selectedTouristIcon = L.divIcon({ 
     html: `<div class="relative animate-pulse">
-      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='44' class="drop-shadow-xl">
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='44'>
         <path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='#059669'/>
         <circle cx='12' cy='9' r='3.5' fill='white'/>
         <path d='M12 5.5c1.93 0 3.5 1.57 3.5 3.5s-1.57 3.5-3.5 3.5S8.5 10.93 8.5 9s1.57-3.5 3.5-3.5z' fill='#059669'/>
@@ -1228,7 +1226,7 @@ out center;`;
   
   const alertIcon = L.divIcon({ 
     html: `<div class="relative animate-bounce">
-      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='44' class="drop-shadow-xl">
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='44'>
         <path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='#dc2626'/>
         <circle cx='12' cy='9' r='4' fill='white'/>
         <text x='12' y='13' text-anchor='middle' fill='#dc2626' font-size='8' font-weight='bold'>!</text>
@@ -1241,7 +1239,7 @@ out center;`;
 
   const verifiedAlertIcon = L.divIcon({ 
     html: `<div class="relative">
-      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='32' height='40' class="drop-shadow-lg">
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='32' height='40'>
         <path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='#f59e0b'/>
         <circle cx='12' cy='9' r='3' fill='white'/>
         <path d='M10.5 9l1 1 2.5-2.5' stroke='#f59e0b' stroke-width='1.5' fill='none'/>
@@ -1254,7 +1252,7 @@ out center;`;
 
   const policeIcon = L.divIcon({
     html: `<div class="relative">
-      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='28' height='36' class="drop-shadow">
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='28' height='36'>
         <path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='#1d4ed8'/>
         <path d='M7 9h10l-5 6-5-6z' fill='white'/>
       </svg>
@@ -1264,71 +1262,199 @@ out center;`;
     iconAnchor: [14, 36]
   });
 
+  const newLocal = 
+<div>
+  <Card className="border border-red-300 rounded-lg sm:rounded-xl bg-gradient-to-b from-white to-red-50">
+    <CardHeader className="pb-3 sm:pb-4 border-b border-red-200 px-4 sm:px-6 pt-4 sm:pt-6">
+      <CardTitle className="text-base sm:text-lg lg:text-xl xl:text-2xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
+        <svg
+          className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z"
+          />
+        </svg>
+        <span className="truncate">Dispatch SOS Help</span>
+      </CardTitle>
+    </CardHeader>
+
+    <CardContent className="space-y-4 sm:space-y-5 pt-4 px-4 sm:px-6 pb-4 sm:pb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {/* Select Alert */}
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+            Select Alert
+          </label>
+          <select
+            value={dispatchForm.alertId}
+            onChange={(e) =>
+              setDispatchForm({ ...dispatchForm, alertId: e.target.value })
+            }
+            className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+          >
+            <option value="">Choose pending alert…</option>
+            {alerts
+              .filter((a) => a.data.status === "pending")
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {(a.data.userName || "Unknown") +
+                    (a.data.location
+                      ? ` (${a.data.location.lat.toFixed(3)}, ${a.data.location.lng.toFixed(3)})`
+                      : "")}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* Emergency Type */}
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+            Emergency Type
+          </label>
+          <select
+            value={dispatchForm.classification}
+            onChange={(e) =>
+              setDispatchForm({
+                ...dispatchForm,
+                classification: e.target.value,
+              })
+            }
+            className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+          >
+            <option>Medical Emergency</option>
+            <option>Security Threat</option>
+            <option>Accident</option>
+            <option>Natural Disaster</option>
+            <option>Lost/Stranded</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        {/* Dispatch Button */}
+        <div className="flex items-end sm:col-span-2 lg:col-span-1">
+          <Button
+            disabled={!dispatchForm.alertId}
+            onClick={async () => {
+              if (!dispatchForm.alertId) return;
+              try {
+                await dispatchAlert({
+                  alertId: dispatchForm.alertId,
+                  adminId: user?.uid ?? "unknown",
+                  classification: dispatchForm.classification,
+                  notes:
+                    dispatchForm.notes ||
+                    "Dispatched from admin dashboard",
+                });
+                setDispatchForm((prev) => ({ ...prev, notes: "" }));
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg transition-all duration-200 text-xs sm:text-sm"
+          >
+            🚨 Dispatch Help
+          </Button>
+        </div>
+      </div>
+
+      {/* Notes Section */}
+      <div>
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+          Notes (optional)
+        </label>
+        <textarea
+          value={dispatchForm.notes}
+          onChange={(e) =>
+            setDispatchForm({ ...dispatchForm, notes: e.target.value })
+          }
+          className="w-full border border-red-200 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm min-h-20 resize-none focus:ring-2 focus:ring-red-500 focus:outline-none bg-white"
+          placeholder="Add context for responders…"
+        />
+      </div>
+
+      {dispatchForm.alertId && (
+        <p className="text-xs text-gray-500 italic text-center sm:text-left px-2 sm:px-0">
+          💡 Tip: Review alert details on the map before dispatching.
+        </p>
+      )}
+    </CardContent>
+  </Card>
+</div>
+
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-50 via-gray-100 to-green-50">
-      <div className="container mx-auto px-8 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-green-50">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 sm:py-6 lg:py-8">
         {/* Header with Statistics */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-5xl font-black text-gray-900 mb-3 font-lato tracking-tight bg-gradient-to-r from-gray-900 via-green-700 to-gray-900 bg-clip-text text-transparent">
+        <div className="mb-4 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-black text-gray-900 mb-2 font-lato tracking-tight bg-gradient-to-r from-gray-900 via-green-700 to-gray-900 bg-clip-text text-transparent">
                 Admin Control Center
               </h1>
-              <p className="text-lg text-gray-600 font-lato font-medium tracking-wide">Real-time monitoring and emergency response</p>
+              <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-lato font-medium tracking-wide">Real-time monitoring and emergency response</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-500 font-lato">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <div className="text-xs sm:text-sm text-gray-500 font-lato hidden sm:block">
                 Last updated: {new Date().toLocaleTimeString()}
               </div>
               <Button 
                 onClick={() => window.location.reload()} 
                 variant="outline" 
                 size="sm"
-                className="border-green-600 text-green-600 hover:bg-green-50 font-lato font-medium"
+                className="border-green-600 text-green-600 hover:bg-green-50 font-lato font-medium text-xs sm:text-sm"
               >
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 Refresh
               </Button>
             </div>
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-red-300 transition-all duration-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-red-300 hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Active Alerts</p>
-                  <p className="text-3xl font-bold text-red-600 font-lato">{stats.activeAlerts}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Active Alerts</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-red-600 font-lato">{stats.activeAlerts}</p>
                 </div>
-                <div className="w-14 h-14 bg-red-50 border border-red-100 rounded-xl flex items-center justify-center">
-                  <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-red-50 border border-red-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-green-300 transition-all duration-200">
+            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-green-300 hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Total Tourists</p>
-                  <p className="text-3xl font-bold text-green-600 font-lato">{stats.totalTourists}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Total Tourists</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-green-600 font-lato">{stats.totalTourists}</p>
                 </div>
-                <div className="w-14 h-14 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center">
-                  <svg className="w-7 h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-green-50 border border-green-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                   </svg>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:border-amber-300 transition-all duration-200">
+            <div className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 lg:p-6 hover:border-amber-300 hover:shadow-md transition-all duration-200 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2 font-lato">Dispatched</p>
-                  <p className="text-3xl font-bold text-amber-600 font-lato">{stats.verifiedAlerts}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2 font-lato">Dispatched</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-amber-600 font-lato">{stats.verifiedAlerts}</p>
                 </div>
-                <div className="w-14 h-14 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center">
-                  <svg className="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-amber-50 border border-amber-100 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ml-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
@@ -1337,22 +1463,22 @@ out center;`;
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-4">
-          <div className="lg:col-span-3 space-y-6">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-4">
+          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
             {/* Enhanced Map Section */}
             <Card id="admin-map" className="border-green-200 overflow-hidden">
-              <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
-                <div className="px-6 py-4 flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl font-bold font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
+              <CardHeader className="bg-gradient-to-r from-green-600 to-green-700 text-white border-b-0 p-0">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-base sm:text-lg lg:text-xl font-bold font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
                       Real-time Monitoring Map
                     </CardTitle>
-                    <CardDescription className="text-green-100 mt-1 font-lato font-medium">
+                    <CardDescription className="text-green-100 mt-1 font-lato font-medium text-xs sm:text-sm">
                       Live tracking • {stats.totalTourists} tourists • {stats.activeAlerts} active alerts
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm bg-green-800/30 px-3 py-1 rounded-full">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <div className="text-xs sm:text-sm bg-green-800/30 px-2 sm:px-3 py-1 rounded-full">
                       Zoom: {mapZoom}
                     </div>
                   </div>
@@ -1360,7 +1486,7 @@ out center;`;
               </CardHeader>
 
               <CardContent className="p-0">
-                <div style={{ height: 560 }} className="relative">
+                <div style={{ height: '50vh', minHeight: '400px', maxHeight: '600px' }} className="relative">
                   <MapContainer 
                     center={mapCenter} 
                     zoom={mapZoom} 
@@ -1630,16 +1756,16 @@ out center;`;
 
             {/* Enhanced Selected Location Section - Spans full width when selected */}
             <Card className="border-green-200 lg:col-span-3">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-gray-800 via-green-600 to-gray-800 bg-clip-text text-transparent">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
+                <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-gray-800 via-green-600 to-gray-800 bg-clip-text text-transparent">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  Selected Location Details
+                  <span className="truncate">Selected Location Details</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 sm:px-6">
                 {selected ? (
                   <div className="space-y-4">
                     {/* Enhanced SOS Alert Display */}
@@ -2027,12 +2153,12 @@ out center;`;
             </Card>
           </div>
 
-          <aside className="space-y-6">
+          <aside className="space-y-4 sm:space-y-6">
             {/* Enhanced RTDB SOS Panel */}
             {rtdbSOS && typeof rtdbSOS.latitude === 'number' && typeof rtdbSOS.longitude === 'number' && (
               <Card className="border-red-400 bg-red-50 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
+                <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
+                  <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
                     <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
                     <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -2197,16 +2323,16 @@ out center;`;
             )}
 
             {/* Enhanced Tourists Panel */}
-            <Card className="border-green-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
-              <CardHeader className="bg-linear-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
-                <div className="px-5 py-6">
-                  <CardTitle className="text-xl font-bold flex items-center justify-between font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
+            <Card className="border-green-200 overflow-hidden flex flex-col lg:h-[calc(100vh-200px)] max-h-[800px]">
+              <CardHeader className="bg-gradient-to-r from-green-600 to-green-700 text-white border-b-0 p-0 shrink-0">
+                <div className="px-4 sm:px-5 py-4 sm:py-6">
+                  <CardTitle className="text-base sm:text-lg lg:text-xl font-bold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 font-lato tracking-tight bg-gradient-to-r from-white via-green-100 to-white bg-clip-text text-transparent">
                     <span>Tourist Management</span>
-                    <span className="text-sm bg-green-800/30 px-2 py-1 rounded-full text-green-100 font-medium">
+                    <span className="text-xs sm:text-sm bg-green-800/30 px-2 py-1 rounded-full text-green-100 font-medium w-fit">
                       {stats.totalTourists} total
                     </span>
                   </CardTitle>
-                  <CardDescription className="text-green-100 mt-2 font-lato font-medium">
+                  <CardDescription className="text-green-100 mt-2 font-lato font-medium text-xs sm:text-sm">
                     Real-time location tracking
                   </CardDescription>
                 </div>
@@ -2214,16 +2340,16 @@ out center;`;
               
               <CardContent className="p-0 flex flex-col flex-1 min-h-0">
                 {/* Filter Controls */}
-                <div className="p-4 border-b bg-gray-50 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">All Tourists ({tourists.length})</h3>
-                    <div className="text-sm text-gray-500">
+                <div className="p-3 sm:p-4 border-b bg-gray-50 shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">All Tourists ({tourists.length})</h3>
+                    <div className="text-xs sm:text-sm text-gray-500">
                       Showing all registered users
                     </div>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-2 sm:space-y-3">
                   {tourists.map(tourist => {
                     const loc = findLocation(tourist.id);
                     const isSelected = selectedTourist === tourist.id;
@@ -2235,23 +2361,23 @@ out center;`;
                         }`}
                         onClick={() => viewTourist(tourist.id, tourist.name)}
                       >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
+                        <CardContent className="p-3 sm:p-4">
+                          <div className="flex items-start gap-3 sm:gap-4">
                             <div className="shrink-0 relative">
                               {tourist.photoURL ? (
                                 <img 
                                   src={tourist.photoURL} 
-                                  className="w-14 h-14 rounded-full border-2 border-gray-200 shadow-sm object-cover" 
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-gray-200 shadow-sm object-cover" 
                                   alt={tourist.name} 
                                 />
                               ) : (
-                                <div className="w-14 h-14 rounded-full bg-linear-to-br from-green-500 to-green-600 text-white flex items-center justify-center font-bold text-xl shadow-sm">
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-green-500 to-green-600 text-white flex items-center justify-center font-bold text-lg sm:text-xl shadow-sm">
                                   {tourist.name?.charAt(0)?.toUpperCase() || 'T'}
                                 </div>
                               )}
                               {tourist.verified && (
-                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center">
-                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center">
+                                  <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                   </svg>
                                 </div>
@@ -2259,49 +2385,50 @@ out center;`;
                             </div>
                             
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="font-semibold text-gray-900 truncate text-lg">{tourist.name || 'Unnamed User'}</h3>
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <h3 className="font-semibold text-gray-900 truncate text-base sm:text-lg">{tourist.name || 'Unnamed User'}</h3>
                                     {tourist.verified && (
-                                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                                      <span className="bg-blue-50 text-blue-700 px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium">
                                         Verified
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-sm text-gray-600 truncate mb-3">{tourist.email}</p>
+                                  <p className="text-xs sm:text-sm text-gray-600 truncate mb-2 sm:mb-3">{tourist.email}</p>
                                   
-                                  <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                     {tourist.nationality && (
-                                      <span className="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
                                         </svg>
                                         {tourist.nationality}
                                       </span>
                                     )}
                                     {tourist.age && (
-                                      <span className="inline-flex items-center px-2.5 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-medium">
-                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-gray-50 text-gray-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
                                         Age {tourist.age}
                                       </span>
                                     )}
                                     {tourist.gender && (
-                                      <span className="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-purple-50 text-purple-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
                                         {tourist.gender}
                                       </span>
                                     )}
                                     {tourist.profileCompleted && (
-                                      <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-green-50 text-green-700 rounded-full text-[10px] sm:text-xs font-medium">
+                                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" fill="currentColor" viewBox="0 0 20 20">
                                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
-                                        Complete Profile
+                                        <span className="hidden sm:inline">Complete Profile</span>
+                                        <span className="sm:hidden">Complete</span>
                                       </span>
                                     )}
                                   </div>
@@ -2310,10 +2437,10 @@ out center;`;
                                 <Button 
                                   size="sm" 
                                   variant="outline"
-                                  className="shrink-0 ml-4 hover:bg-green-50 hover:border-green-300"
+                                  className="shrink-0 sm:ml-4 hover:bg-green-50 hover:border-green-300 text-xs w-full sm:w-auto mt-2 sm:mt-0"
                                   onClick={(e) => { e.stopPropagation(); openTouristModal(tourist.id); }}
                                 >
-                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                   </svg>
@@ -2344,147 +2471,67 @@ out center;`;
           </aside>
         </div>
         {/* SOS Dispatch Section (Bottom) */}
-        <div className="mt-8">
-          <Card className="border-red-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xl font-bold flex items-center gap-2 font-lato tracking-tight bg-gradient-to-r from-red-800 via-red-600 to-red-800 bg-clip-text text-transparent">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-                Dispatch SOS Help
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Select Alert</label>
-                  <select
-                    value={dispatchForm.alertId}
-                    onChange={(e) => setDispatchForm({ ...dispatchForm, alertId: e.target.value })}
-                    className="w-full border rounded px-3 py-2 text-sm"
-                  >
-                    <option value="">Choose pending alert…</option>
-                    {alerts.filter(a => a.data.status === 'pending').map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {(a.data.userName || 'Unknown') + (a.data.location ? ` (${a.data.location.lat.toFixed(3)}, ${a.data.location.lng.toFixed(3)})` : '')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Emergency Type</label>
-                  <select
-                    value={dispatchForm.classification}
-                    onChange={(e) => setDispatchForm({ ...dispatchForm, classification: e.target.value })}
-                    className="w-full border rounded px-3 py-2 text-sm"
-                  >
-                    <option>Medical Emergency</option>
-                    <option>Security Threat</option>
-                    <option>Accident</option>
-                    <option>Natural Disaster</option>
-                    <option>Lost/Stranded</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    disabled={!dispatchForm.alertId}
-                    onClick={async () => {
-                      if (!dispatchForm.alertId) return;
-                      try {
-                        await dispatchAlert({
-                          alertId: dispatchForm.alertId,
-                          adminId: user?.uid ?? 'unknown',
-                          classification: dispatchForm.classification,
-                          notes: dispatchForm.notes || 'Dispatched from admin dashboard',
-                        });
-                        setDispatchForm((prev) => ({ ...prev, notes: '' }));
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                    className="w-full bg-red-600 hover:bg-red-700"
-                  >
-                    Dispatch Help
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Notes (optional)</label>
-                <textarea
-                  value={dispatchForm.notes}
-                  onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
-                  className="w-full border rounded px-3 py-2 text-sm min-h-20"
-                  placeholder="Add context for responders…"
-                />
-              </div>
-
-              {dispatchForm.alertId && (
-                <div className="text-xs text-gray-500">
-                  Tip: Use the map or the alerts panel to review details before dispatching.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="mt-6 sm:mt-8 lg:mt-10">
+          {newLocal}
         </div>
+
       </div>
       {/* Enhanced Tourist Profile Modal */}
       {profileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setProfileModal(null)}></div>
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+          <div className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             
             {/* Modal Header */}
-            <div className="bg-linear-to-r from-green-600 to-green-700 text-white px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+            <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-3 sm:py-4 shrink-0">
+              <div className="flex items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                   {(() => {
                     const src = (profileModal.photo || profileModal.photoURL) as string | undefined;
                     const isHttp = typeof src === 'string' && /^https?:\/\//i.test(src);
                     if (isHttp) {
                       return (
-                        <img src={src as string} className="w-16 h-16 rounded-full border-3 border-white shadow-lg" alt={profileModal.fullName || profileModal.name || 'User'} />
+                        <img src={src as string} className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full border-2 sm:border-3 border-white shadow-lg shrink-0" alt={profileModal.fullName || profileModal.name || 'User'} />
                       );
                     }
                     return (
-                      <div className="w-16 h-16 rounded-full bg-white text-green-600 flex items-center justify-center font-bold text-2xl shadow-lg">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-white text-green-600 flex items-center justify-center font-bold text-xl sm:text-2xl shadow-lg shrink-0">
                         {(profileModal.fullName || profileModal.name || 'T').charAt(0).toUpperCase()}
                       </div>
                     );
                   })()}
-                  <div>
-                    <h2 className="text-xl font-bold">{profileModal.fullName || profileModal.name || 'Tourist'}</h2>
-                    <p className="text-green-100">{profileModal.email}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base sm:text-lg lg:text-xl font-bold truncate">{profileModal.fullName || profileModal.name || 'Tourist'}</h2>
+                    <p className="text-green-100 text-xs sm:text-sm truncate">{profileModal.email}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                       {profileModal.verified && (
-                        <span className="bg-white/20 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <span className="bg-white/20 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1">
+                          <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                           Verified
                         </span>
                       )}
                       {profileModal.profileCompleted && (
-                        <span className="bg-white/20 text-white px-2 py-1 rounded-full text-xs">
-                          Profile Complete
+                        <span className="bg-white/20 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs">
+                          Complete
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => setProfileModal(null)} className="bg-white/20 hover:bg-white/30 text-white border-white/30">
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <Button variant="secondary" size="sm" onClick={() => setProfileModal(null)} className="bg-white/20 hover:bg-white/30 text-white border-white/30 shrink-0 h-8 w-8 sm:h-auto sm:w-auto p-1 sm:px-3 sm:py-2">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  Close
+                  <span className="hidden sm:inline">Close</span>
                 </Button>
               </div>
             </div>
             
             {/* Modal Content */}
-            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="p-4 sm:p-6 max-h-[calc(95vh-100px)] sm:max-h-[calc(90vh-120px)] overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 
                 {/* Personal Information Card */}
                 <Card className="lg:col-span-2">
