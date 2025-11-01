@@ -30,6 +30,7 @@ const GetApp = () => {
               type="button"
               variant="outline"
               className="text-black bg-white hover:bg-gray-100 w-full sm:w-auto"
+              onClick={() => window.open('https://expo.dev/accounts/anik_paul003/projects/guardioFinal/builds/65190916-75cf-4be2-abdc-dac8385ef599', '_blank')}
             >
               Download App
             </Button>
